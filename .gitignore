@@ -1,0 +1,163 @@
+# Environment Variables (KEEP LOCAL ONLY)
+.env
+.env.local
+.env.production
+.env.test
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.pyc
+*.pyo
+*.pyd
+.Python
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual Environment
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+
+# Machine Learning Models (if they're large)
+*.pkl
+*.joblib
+*.h5
+*.model
+*.weights
+
+# Data files
+*.csv
+*.json
+*.xlsx
+*.xls
+data/raw/
+data/processed/
+datasets/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Node.js (for frontend)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn
+package-lock.json
+yarn.lock
+
+# Frontend build
+frontend/build/
+frontend/dist/
+frontend/.next/
+frontend/out/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Operating System
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Google API credentials (SECURITY CRITICAL)
+*.json
+service-account*.json
+google-credentials*.json
+config/google-service-account.json
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Test files
+test_*.py
+*_test.py
+tests/
+
+# Documentation builds
+docs/_build/
+site/
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# FastAPI specific
+.pytest_cache/
+.mypy_cache/
+.coverage
+
+# ML Training artifacts
+wandb/
+mlruns/
+.mlflow/
+
+# Secrets and keys
+*.key
+*.pem
+*.crt
+secrets/
+credentials/
+
+# Cache
+.cache/
+*.cache
+
+# Build outputs
+build/
+dist/

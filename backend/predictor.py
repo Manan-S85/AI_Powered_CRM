@@ -1,8 +1,8 @@
 import joblib
 from scipy.sparse import hstack
 
-model = joblib.load("../ml/lead_model.pkl")
-vectorizer = joblib.load("../ml/vectorizer.pkl")
+model = joblib.load("../ml_model/lead_model.pkl")
+vectorizer = joblib.load("../ml_model/vectorizer.pkl")
 
 def classify_lead(message, has_budget, has_timeline, urgency):
     text_vec = vectorizer.transform([message])

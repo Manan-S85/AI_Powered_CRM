@@ -1,6 +1,26 @@
+# FastAPI and async MongoDB
+fastapi
+uvicorn[standard]
+motor
+python-multipart
+pydantic[email]
+
+# Original Flask (still available)
 flask
 pymongo
+
+# ML Dependencies  
 scikit-learn
 pandas
 joblib
 scipy
+
+# Google APIs
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client
+
+# Environment and utilities
+python-dotenv
+pydantic-settings
