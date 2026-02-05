@@ -5,6 +5,11 @@
 .env.test
 *.env
 
+# Google Sheets Credentials (SENSITIVE)
+crm-project-*.json
+**/crm-project-*.json
+backend/services/crm-project-*.json
+
 # Python
 __pycache__/
 *.py[cod]

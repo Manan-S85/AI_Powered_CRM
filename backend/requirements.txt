@@ -24,3 +24,8 @@ google-api-python-client
 # Environment and utilities
 python-dotenv
 pydantic-settings
+schedule
+
+# Google Sheets integration
+gspread
+oauth2client
