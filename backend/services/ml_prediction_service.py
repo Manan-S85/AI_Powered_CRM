@@ -36,9 +36,31 @@ class LeadScoringService:
             db_name = os.getenv('DB_NAME', 'ai_crm_db')
             
             if mongo_uri:
-                self.mongo_client = MongoClient(mongo_uri)
-                self.collection = self.mongo_client[db_name]['leads']
-                logging.info("✅ Connected to MongoDB")
+                # Add timeout to prevent hangs - balanced timeouts for reliability
+                self.mongo_client = MongoClient(
+                    mongo_uri,
+                    serverSelectionTimeoutMS=5000,  # 5 second timeout for better reliability
+                    connectTimeoutMS=5000,
+                    socketTimeoutMS=10000,  # 10 seconds for queries
+                    maxPoolSize=10,
+                    minPoolSize=1,
+                    retryWrites=True,
+                    retryReads=True
+                )
+                # Test connection with timeout - retry 3 times
+                for attempt in range(3):
+                    try:
+                        self.mongo_client.admin.command('ping', maxTimeMS=5000)
+                        self.collection = self.mongo_client[db_name]['leads']
+                        logging.info(f"[OK] ML Service connected to MongoDB (attempt {attempt+1})")
+                        break
+                    except Exception as conn_err:
+                        if attempt == 2:  # Last attempt
+                            logging.error(f"[ERROR] ML Service MongoDB connection failed: {conn_err}")
+                            self.mongo_client = None
+                            self.collection = None
+                        else:
+                            logging.warning(f"[RETRY] ML Service MongoDB connection attempt {attempt+1} failed, retrying...")
             
             # Load the trained temperature model
             model_path = os.path.join(os.path.dirname(__file__), '..', '..', 'ml_model', 'models', 'lead_temperature_model.pkl')
@@ -307,6 +329,27 @@ class LeadScoringService:
                 'ml_enabled': True
             })
             
+            # Save to MongoDB if collection is available
+            if self.collection is not None:
+                try:
+                    # Check if lead already exists
+                    existing_lead = self.collection.find_one({'unique_id': unique_id})
+                    
+                    if existing_lead:
+                        # Update existing lead
+                        self.collection.update_one(
+                            {'unique_id': unique_id},
+                            {'$set': enhanced_record}
+                        )
+                        logging.info(f"✅ Updated lead: {unique_id}")
+                    else:
+                        # Insert new lead
+                        self.collection.insert_one(enhanced_record)
+                        logging.info(f"✅ Saved new lead to MongoDB: {unique_id}")
+                except Exception as db_error:
+                    logging.warning(f"⚠️ Could not save to MongoDB: {db_error}")
+                    # Continue anyway - we still have the prediction result
+            
             return enhanced_record
             
         except Exception as e:
@@ -411,8 +454,121 @@ class LeadScoringService:
             logging.error(f"Error getting stats: {e}")
             return {}
 
-# Global instance
-lead_scoring_service = LeadScoringService()
+    def get_all_leads_with_predictions(self, limit: int = 50) -> List[Dict]:
+        """Get all leads with their ML predictions from MongoDB."""
+        try:
+            if self.collection is None:
+                logging.warning("[WARN] No MongoDB collection available for leads")
+                # Try to reinitialize connection
+                self._initialize_components()
+                if self.collection is None:
+                    return []
+            
+            cursor = self.collection.find({}).limit(limit).sort("_id", -1)
+            leads = list(cursor)
+            logging.info(f"[OK] Fetched {len(leads)} leads from MongoDB")
+            
+            return leads
+            
+        except Exception as e:
+            logging.error(f"[ERROR] Failed to fetch leads: {e}")
+            # Try to reinitialize connection for next attempt
+            try:
+                self._initialize_components()
+            except:
+                pass
+            return []
+    
+    def get_lead_with_prediction(self, unique_id: str) -> Optional[Dict]:
+        """Get a specific lead with its ML prediction."""
+        try:
+            if self.collection is None:
+                return None
+            
+            lead = self.collection.find_one({"unique_id": unique_id})
+            return lead
+            
+        except Exception as e:
+            logging.error(f"Error getting lead {unique_id}: {e}")
+            return None
+    
+    def get_leads_by_temperature(self, temperature: str, limit: int = 20) -> List[Dict]:
+        """Get leads filtered by predicted temperature."""
+        try:
+            if self.collection is None:
+                return []
+            
+            query = {"ml_prediction.predicted_temperature": temperature}
+            cursor = self.collection.find(query).limit(limit)
+            leads = list(cursor)
+            
+            return leads
+            
+        except Exception as e:
+            logging.error(f"Error getting leads by temperature {temperature}: {e}")
+            return []
+
+# Global instance - lazy initialization to prevent startup hangs
+_lead_scoring_service = None
+
+def get_lead_scoring_service():
+    """
+    Get the lead scoring service instance with lazy initialization.
+    This prevents MongoDB connection issues from blocking imports.
+    """
+    global _lead_scoring_service
+    if _lead_scoring_service is None:
+        try:
+            _lead_scoring_service = LeadScoringService()
+            logging.info("✅ Lead scoring service initialized successfully")
+        except Exception as e:
+            logging.error(f"❌ Failed to initialize lead scoring service: {e}")
+            # Return a mock service that always returns errors
+            _lead_scoring_service = MockLeadScoringService()
+    return _lead_scoring_service
+
+class MockLeadScoringService:
+    """Mock service for when initialization fails."""
+    
+    def __init__(self):
+        self.temperature_model = None
+        self.model_metadata = {'error': 'Service initialization failed'}
+        
+    def process_lead_with_ml(self, lead_data):
+        return {
+            'unique_id': 'error',
+            'ml_prediction': {
+                'error': 'ML service not available - check MongoDB connection and model files'
+            }
+        }
+    
+    def get_all_leads_with_predictions(self, limit=50):
+        return []
+    
+    def get_leads_by_temperature(self, temperature, limit=20):
+        return []
+    
+    def get_prediction_stats(self):
+        return {
+            'total_leads': 0,
+            'total_predictions': 0,
+            'coverage_percentage': 0.0,
+            'temperature_distribution': []
+        }
+
+# For backwards compatibility - create a simple lazy-loaded variable
+class LazyLeadScoringService:
+    """Wrapper for lazy-loaded service."""
+    def __init__(self):
+        self._service = None
+    
+    def __getattr__(self, name):
+        if self._service is None:
+            self._service = get_lead_scoring_service()
+        return getattr(self._service, name)
+
+# Create module-level instance
+lead_scoring_service = LazyLeadScoringService()
 
 def main():
     """Demo function to test the ML prediction service."""

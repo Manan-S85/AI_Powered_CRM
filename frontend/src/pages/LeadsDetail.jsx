@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../api/Api";
+import { ArrowLeft } from "lucide-react";
 
 export default function LeadDetail() {
   const { id } = useParams();
@@ -18,7 +19,18 @@ export default function LeadDetail() {
     try {
       setLoading(true);
       const res = await api.get(`/leads/${id}`);
-      setLead(res.data?.lead);
+      const rawLead = res.data?.lead;
+
+      if (rawLead) {
+        setLead({
+          ...rawLead,
+          name: rawLead.name || rawLead.full_name || "N/A",
+          role_position: rawLead.role_position || rawLead.applied_position || rawLead.position || "N/A",
+          email: rawLead.email || "N/A",
+        });
+      } else {
+        setLead(null);
+      }
       setError("");
     } catch (err) {
       setError("Failed to load lead details");
@@ -61,9 +73,10 @@ export default function LeadDetail() {
     <div className="min-h-screen bg-gray-50 p-8">
       <button
         onClick={() => navigate(-1)}
-        className="mb-6 px-4 py-2 bg-white shadow rounded-lg hover:bg-gray-100"
+        className="mb-6 px-4 py-2 bg-white shadow rounded-lg hover:bg-gray-100 inline-flex items-center gap-2"
       >
-        ← Back
+        <ArrowLeft size={16} />
+        Back
       </button>
 
       <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow p-8">

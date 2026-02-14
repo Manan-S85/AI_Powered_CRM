@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import API from "../api/Api";
 import hero from "../assets/images.jpg";
 import { Eye, EyeOff } from "lucide-react";
@@ -26,26 +26,52 @@ const Login = () => {
     setLoading(true);
 
     try {
-      const { data } = await API.post("/api/auth/login", form);
+      const { data } = await API.post("/auth/login", form);
 
-      // ✅ ADMIN ONLY ACCESS
-      if (data.user.role !== "admin") {
-        setError("Access denied. Admin privileges required.");
+      console.log("Login response:", data);
+
+      // Check if login was successful
+      if (data.success) {
+        // Backend returns access_token, not token
+        const token = data.access_token;
+        const userRole = data.user?.role;
+
+        // ADMIN ONLY ACCESS
+        if (userRole !== "admin") {
+          setError("Access denied. Admin privileges required.");
+          setLoading(false);
+          return;
+        }
+
+        localStorage.setItem("token", token);
+        localStorage.setItem("role", userRole);
+        localStorage.setItem("user", JSON.stringify(data.user));
+
+        // Single dashboard entry
+        navigate("/dashboard", { replace: true });
+      } else {
+        setError(data.message || "Login failed");
         setLoading(false);
-        return;
       }
 
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("role", data.user.role);
-
-      // ✅ Single dashboard entry
-      navigate("/dashboard", { replace: true });
-
     } catch (err) {
-      setError(err.response?.data?.message || "Invalid email or password");
+      console.error("Login error:", err);
+      
+      // Handle different error types
+      if (err.code === 'ECONNABORTED' || err.code === 'ERR_NETWORK') {
+        setError("Cannot connect to backend. Is the server running?");
+      } else if (err.response?.data?.detail) {
+        setError(err.response.data.detail);
+      } else if (err.response?.data?.message) {
+        setError(err.response.data.message);
+      } else if (err.message) {
+        setError(err.message);
+      } else {
+        setError("Invalid email or password");
+      }
+      
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   return (
@@ -136,6 +162,14 @@ const Login = () => {
           >
             {loading ? "Signing in..." : "Sign In"}
           </button>
+
+          {/* SIGNUP LINK */}
+          <p className="text-center mt-6">
+            <span className="text-gray-500">Don't have an account? </span>
+            <Link to="/signup" className="text-indigo-600 hover:text-indigo-700 font-semibold">
+              Sign Up
+            </Link>
+          </p>
 
           <p className="text-gray-400 text-sm mt-8 text-center">
             Secure Admin Access • LeadAI © 2026

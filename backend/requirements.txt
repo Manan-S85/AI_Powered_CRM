@@ -5,6 +5,10 @@ motor
 python-multipart
 pydantic[email]
 
+# Authentication (using Python built-ins: hashlib, secrets, jwt)
+PyJWT
+python-jose[cryptography]
+
 # Original Flask (still available)
 flask
 pymongo
