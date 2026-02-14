@@ -59,7 +59,7 @@ export default function LeadDetail() {
         <p className="text-red-500">{error}</p>
         <button
           onClick={fetchLead}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-lg"
+          className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
         >
           Retry
         </button>

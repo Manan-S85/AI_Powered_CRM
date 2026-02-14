@@ -75,7 +75,7 @@ export default function AddLead() {
   return (
     <div className="min-h-screen bg-gray-50 p-8 flex justify-center">
       <div className="bg-white w-full md:w-3/4 lg:w-2/3 rounded-2xl shadow-xl p-8">
-        <h1 className="text-3xl font-bold mb-6 text-indigo-600">Add New Candidate</h1>
+        <h1 className="text-3xl font-bold mb-6 text-slate-800">Add New Candidate</h1>
 
         {error && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
@@ -114,7 +114,7 @@ export default function AddLead() {
                 value={lead.name}
                 onChange={handleChange}
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 placeholder="John Doe"
               />
             </div>
@@ -128,7 +128,7 @@ export default function AddLead() {
                 value={lead.email}
                 onChange={handleChange}
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 placeholder="john@example.com"
               />
             </div>
@@ -142,7 +142,7 @@ export default function AddLead() {
                 value={lead.phone}
                 onChange={handleChange}
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 placeholder="+1 234 567 8900"
               />
             </div>
@@ -155,7 +155,7 @@ export default function AddLead() {
                 value={lead.highest_education}
                 onChange={handleChange}
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
               >
                 <option value="">Select Education</option>
                 <option value="High School">High School</option>
@@ -176,7 +176,7 @@ export default function AddLead() {
                 value={lead.role_position}
                 onChange={handleChange}
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 placeholder="Software Engineer"
               />
             </div>
@@ -192,7 +192,7 @@ export default function AddLead() {
                 required
                 min="0"
                 max="50"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 placeholder="5"
               />
             </div>
@@ -206,7 +206,7 @@ export default function AddLead() {
                 onChange={handleChange}
                 required
                 rows="3"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 placeholder="Python, React, Node.js, AWS..."
               />
             </div>
@@ -220,7 +220,7 @@ export default function AddLead() {
                 value={lead.location}
                 onChange={handleChange}
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 placeholder="New York, USA"
               />
             </div>
@@ -233,7 +233,7 @@ export default function AddLead() {
                 name="linkedin_profile"
                 value={lead.linkedin_profile}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 placeholder="https://linkedin.com/in/johndoe"
               />
             </div>
@@ -249,7 +249,7 @@ export default function AddLead() {
                 required
                 min="0"
                 step="1000"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 placeholder="80000"
               />
             </div>
@@ -262,7 +262,7 @@ export default function AddLead() {
                 value={lead.willing_to_relocate}
                 onChange={handleChange}
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
               >
                 <option value="Yes">Yes</option>
                 <option value="No">No</option>
@@ -275,7 +275,7 @@ export default function AddLead() {
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 rounded-lg font-semibold text-lg hover:from-indigo-700 hover:to-purple-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+              className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-700 text-white py-3 rounded-lg font-semibold text-lg hover:from-emerald-700 hover:to-teal-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
             >
               {loading ? "Processing..." : "Add Candidate & Get ML Prediction"}
             </button>

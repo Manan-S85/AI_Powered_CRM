@@ -27,25 +27,65 @@ export default function Dashboard() {
         const leadsData = res.data.leads || [];
         console.log("[Dashboard] Got", leadsData.length, "leads");
 
-        const normalizeLead = (lead) => ({
-          ...lead,
-          name:
-            lead.name ||
-            lead.full_name ||
-            `${lead.firstName || ""} ${lead.lastName || ""}`.trim() ||
-            "N/A",
-          email: lead.email || "N/A",
-          phone: lead.phone || lead.phoneNumber || lead.mobile_number || "N/A",
-          highest_education: lead.highest_education || "N/A",
-          role_position: lead.role_position || lead.applied_position || lead.position || "N/A",
-          years_of_experience:
-            lead.years_of_experience ?? lead.experience ?? 0,
-          skills: lead.skills || lead.primary_skills || lead.expertise || "N/A",
-          location: lead.location || lead.current_location || lead.city || "N/A",
-          linkedin_profile: lead.linkedin_profile || "N/A",
-          expected_salary: lead.expected_salary ?? 0,
-          willing_to_relocate: lead.willing_to_relocate || "N/A",
-        });
+        const canonicalize = (key) =>
+          String(key || "")
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, "");
+
+        const normalizeLead = (lead) => {
+          const index = Object.entries(lead || {}).reduce((accumulator, [rawKey, value]) => {
+            accumulator[canonicalize(rawKey)] = value;
+            return accumulator;
+          }, {});
+
+          const getValue = (...aliases) => {
+            for (const alias of aliases) {
+              const value = index[canonicalize(alias)];
+              if (value !== undefined && value !== null && String(value).trim() !== "") {
+                return value;
+              }
+            }
+            return undefined;
+          };
+
+          const firstName = getValue("firstName", "first_name");
+          const lastName = getValue("lastName", "last_name");
+          const fullName = `${firstName || ""} ${lastName || ""}`.trim();
+
+          return {
+            ...lead,
+            name:
+              getValue("name", "full_name", "full name", "candidate name") ||
+              fullName ||
+              "N/A",
+            email: getValue("email", "email address") || "N/A",
+            phone:
+              getValue("phone", "phoneNumber", "mobile_number", "mobile number", "contact number") ||
+              "N/A",
+            highest_education:
+              getValue("highest_education", "highest education", "education", "qualification") ||
+              "N/A",
+            role_position:
+              getValue("role_position", "applied_position", "position", "applied position", "job role") ||
+              "N/A",
+            years_of_experience:
+              getValue("years_of_experience", "years of experience", "experience", "exp") ?? 0,
+            skills:
+              getValue("skills", "primary_skills", "primary skills", "expertise", "technologies") ||
+              "N/A",
+            location:
+              getValue("location", "current_location", "current location", "city") ||
+              "N/A",
+            linkedin_profile:
+              getValue("linkedin_profile", "linkedin profile", "linkedin") ||
+              "N/A",
+            expected_salary:
+              getValue("expected_salary", "expected salary", "salary", "annual salary") ?? 0,
+            willing_to_relocate:
+              getValue("willing_to_relocate", "willing to relocate", "relocate") ||
+              "N/A",
+          };
+        };
         
         const normalizedLeads = leadsData.map(normalizeLead);
         
@@ -64,8 +104,8 @@ export default function Dashboard() {
 
   const temperatureColor = (temp) => {
     if (temp === "Hot") return "bg-red-100 text-red-600";
-    if (temp === "Warm") return "bg-yellow-100 text-yellow-700";
-    return "bg-blue-100 text-blue-600";
+    if (temp === "Warm") return "bg-amber-100 text-amber-700";
+    return "bg-cyan-100 text-cyan-700";
   };
 
   const formatSalaryINR = (value) => {
@@ -98,7 +138,7 @@ export default function Dashboard() {
         <p className="text-red-500">{error}</p>
         <button
           onClick={fetchLeads}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-lg"
+          className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
         >
           Retry
         </button>
@@ -106,7 +146,7 @@ export default function Dashboard() {
     );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 p-8">
       <div className="mb-8 flex justify-between items-center">
         <div>
           <h1 className="text-4xl font-bold text-gray-800">Leads Dashboard</h1>
@@ -114,7 +154,7 @@ export default function Dashboard() {
         </div>
         <button
           onClick={fetchLeads}
-          className="px-5 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition shadow-md inline-flex items-center gap-2"
+          className="px-5 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition shadow-md inline-flex items-center gap-2"
         >
           <RefreshCw size={16} />
           Refresh
@@ -143,7 +183,7 @@ export default function Dashboard() {
           <p className="text-gray-500 text-lg mb-4">No leads found. Add your first candidate!</p>
           <button
             onClick={() => navigate("/addlead")}
-            className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+            className="px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition"
           >
             + Add Lead
           </button>
@@ -152,7 +192,7 @@ export default function Dashboard() {
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full min-w-max">
-              <thead className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white">
+              <thead className="bg-gradient-to-r from-slate-700 to-emerald-700 text-white">
                 <tr>
                   <th className="p-4 text-left font-semibold">Full Name</th>
                   <th className="p-4 text-left font-semibold">Email</th>
@@ -174,7 +214,7 @@ export default function Dashboard() {
                   <tr
                     key={lead._id}
                     onClick={() => navigate(`/lead/${lead._id}`)}
-                    className={`border-t hover:bg-indigo-50 transition cursor-pointer ${
+                    className={`border-t hover:bg-slate-50 transition cursor-pointer ${
                       idx % 2 === 0 ? "bg-gray-50" : "bg-white"
                     }`}
                   >

@@ -38,7 +38,7 @@ class UserSignupRequest(BaseModel):
     name: str
     email: EmailStr
     password: str
-    role: str = "user"
+    role: str = "admin"
 
 class UserLoginRequest(BaseModel):
     email: EmailStr
@@ -387,7 +387,9 @@ async def signup_user(user_data: UserSignupRequest):
         except:
             from auth_service_dev import UserSignup
         
-        signup_data = UserSignup(**user_data.model_dump())
+        signup_payload = user_data.model_dump()
+        signup_payload["role"] = "admin"
+        signup_data = UserSignup(**signup_payload)
         result = auth_service.register_user(signup_data)
         
         if 'error' in result:

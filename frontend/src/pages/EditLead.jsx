@@ -141,7 +141,7 @@ export default function EditLead() {
           <button
             onClick={handleUpdate}
             disabled={saving}
-            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+            className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
           >
             {saving ? "Updating..." : "Update Lead"}
           </button>

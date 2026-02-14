@@ -101,6 +101,13 @@ class LeadScoringService:
     def map_new_schema_to_model_features(self, record: Dict) -> Dict:
         """Map new schema fields to what the trained model expects."""
         try:
+            def pick(*keys, default=None):
+                for key in keys:
+                    value = record.get(key)
+                    if value is not None and str(value).strip() != "":
+                        return value
+                return default
+
             # Get the features the model expects
             expected_features = self.model_metadata['feature_columns']
             
@@ -110,7 +117,7 @@ class LeadScoringService:
             # Direct mappings where possible
             mappings = {
                 'Lead Origin': 'Landing Page Submission',  # Default assumption
-                'Lead Source': record.get('linkedin_profile', 'Direct Traffic'),  # Infer from LinkedIn
+                'Lead Source': pick('linkedin_profile', default='Direct Traffic'),  # Infer from LinkedIn
                 'Do Not Email': 'No',  # Default
                 'Do Not Call': 'No',   # Default
                 'TotalVisits': 1,  # Default for new leads
@@ -118,7 +125,7 @@ class LeadScoringService:
                 'Page Views Per Visit': 2.0,  # Default
                 'Last Activity': 'Form Submitted',  # Default for new leads
                 'Country': 'India',  # Default
-                'Specialization': record.get('primary_skills', 'Select'),  # Updated field name
+                'Specialization': pick('primary_skills', 'skills', default='Select'),
                 'How did you hear about X Education': 'Select',
                 'What is your current occupation': self._infer_occupation(record),
                 'What matters most to you in choosing a course': 'Better Career Prospects',
@@ -135,7 +142,7 @@ class LeadScoringService:
                 'Update me on Supply Chain Content': 'No',
                 'Get updates on DM Content': 'No',
                 'Lead Profile': 'Potential Lead',
-                'City': record.get('current_location', 'Mumbai'),  # Updated field name
+                'City': pick('current_location', 'location', default='Mumbai'),
                 'Asymmetrique Activity Index': '02.Medium',
                 'Asymmetrique Profile Index': '02.Medium',
                 'Asymmetrique Activity Score': 15.0,
@@ -143,12 +150,12 @@ class LeadScoringService:
                 'I agree to pay the amount through cheque': 'No',
                 'A free copy of Mastering The Interview': 'No',
                 'Last Notable Activity': 'Form Submitted',
-                'Highest education': self._infer_education(record),
-                'Years of experience': self._process_numeric_field(record.get('years_of_experience', '0')),
-                'Primary skills': record.get('primary_skills', 'Unknown'),  # Updated field name
-                'Current location': record.get('current_location', 'Unknown'),  # Updated field name
-                'Expected salary': self._process_salary(record.get('expected_salary', '0')),
-                'Willing to relocate': record.get('willing_to_relocate', 'No'),  # Updated field name
+                'Highest education': pick('highest_education', default=self._infer_education(record)),
+                'Years of experience': self._process_numeric_field(pick('years_of_experience', 'experience', default='0')),
+                'Primary skills': pick('primary_skills', 'skills', default='Unknown'),
+                'Current location': pick('current_location', 'location', default='Unknown'),
+                'Expected salary': self._process_salary(pick('expected_salary', 'salary', default='0')),
+                'Willing to relocate': pick('willing_to_relocate', 'relocate', default='No'),
                 'Sent to backend': 'Yes'
             }
             
@@ -168,7 +175,12 @@ class LeadScoringService:
     
     def _infer_occupation(self, record: Dict) -> str:
         """Infer occupation from applied position."""
-        role = record.get('applied_position', '').lower()  # Updated field name
+        role = str(
+            record.get('applied_position')
+            or record.get('role_position')
+            or record.get('position')
+            or ''
+        ).lower()
         if 'engineer' in role or 'developer' in role:
             return 'Working Professional'
         elif 'manager' in role or 'lead' in role:
@@ -184,10 +196,10 @@ class LeadScoringService:
         
         # Check completeness
         if record.get('email'): score += 1
-        if record.get('mobile_number'): score += 1  # Updated field name
+        if record.get('mobile_number') or record.get('phone'): score += 1
         if record.get('linkedin_profile'): score += 2
-        if record.get('highest_education'): score += 2  # Updated field name  
-        if record.get('primary_skills'): score += 1  # Updated field name
+        if record.get('highest_education'): score += 2
+        if record.get('primary_skills') or record.get('skills'): score += 1
         
         # Handle years_of_experience as string
         experience_str = str(record.get('years_of_experience', '0'))
@@ -206,6 +218,10 @@ class LeadScoringService:
     
     def _infer_education(self, record: Dict) -> str:
         """Infer education level from role/experience."""
+        explicit_education = record.get('highest_education')
+        if explicit_education and str(explicit_education).strip():
+            return str(explicit_education)
+
         # Handle years_of_experience as string or number
         experience_str = str(record.get('years_of_experience', '0'))
         try:
@@ -213,7 +229,12 @@ class LeadScoringService:
         except (ValueError, TypeError):
             experience = 0
             
-        role = record.get('applied_position', '').lower()  # Updated field name
+        role = str(
+            record.get('applied_position')
+            or record.get('role_position')
+            or record.get('position')
+            or ''
+        ).lower()
         
         if 'senior' in role or experience >= 8:
             return 'Master\'s Degree'

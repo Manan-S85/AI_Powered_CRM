@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import API from "../api/Api";
-import { Eye, EyeOff, User, Mail, Shield } from "lucide-react";
+import { Eye, EyeOff, User, Mail } from "lucide-react";
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -11,7 +11,6 @@ const Signup = () => {
     email: "",
     password: "",
     confirmPassword: "",
-    role: "admin", // Default to admin for now
   });
 
   const [error, setError] = useState("");
@@ -46,7 +45,7 @@ const Signup = () => {
         name: form.name,
         email: form.email,
         password: form.password,
-        role: form.role
+        role: "admin"
       });
 
       console.log("Signup response:", data);
@@ -55,7 +54,7 @@ const Signup = () => {
       if (data.success) {
         // Backend returns access_token, not token
         const token = data.access_token;
-        const userRole = data.user?.role || form.role;
+        const userRole = data.user?.role || "admin";
 
         // Store auth data
         localStorage.setItem("token", token);
@@ -93,13 +92,13 @@ const Signup = () => {
     <div className="min-h-screen flex">
       
       {/* LEFT PANEL — BRANDING */}
-      <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-indigo-700 via-purple-700 to-indigo-900 text-white flex-col justify-center px-20">
+      <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-slate-800 via-slate-700 to-emerald-800 text-white flex-col justify-center px-20">
         <div className="max-w-lg">
           <div className="flex items-center gap-4 mb-8">
             <h1 className="text-5xl font-bold tracking-tight">AI RECRUITER</h1>
           </div>
 
-          <p className="text-xl text-indigo-100 mb-8 leading-relaxed">
+          <p className="text-xl text-slate-200 mb-8 leading-relaxed">
             Join our platform and identify high-converting leads instantly using machine learning.
             Make smarter sales decisions with real-time AI predictions.
           </p>
@@ -141,7 +140,7 @@ const Signup = () => {
               value={form.name}
               onChange={handleChange}
               required
-              className="w-full mt-2 px-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-600 outline-none transition"
+              className="w-full mt-2 px-4 py-3 border rounded-xl focus:ring-2 focus:ring-emerald-600 outline-none transition"
               placeholder="Enter your full name"
             />
           </div>
@@ -159,28 +158,9 @@ const Signup = () => {
               value={form.email}
               onChange={handleChange}
               required
-              className="w-full mt-2 px-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-600 outline-none transition"
+              className="w-full mt-2 px-4 py-3 border rounded-xl focus:ring-2 focus:ring-emerald-600 outline-none transition"
               placeholder="admin@leadai.com"
             />
-          </div>
-
-          {/* ROLE */}
-          <div className="mb-5">
-            <label className="text-sm font-semibold text-gray-600 flex items-center gap-2">
-              <Shield size={16} />
-              Role
-            </label>
-
-            <select
-              name="role"
-              value={form.role}
-              onChange={handleChange}
-              required
-              className="w-full mt-2 px-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-600 outline-none transition"
-            >
-              <option value="admin">Admin</option>
-              <option value="user">User</option>
-            </select>
           </div>
 
           {/* PASSWORD */}
@@ -195,7 +175,7 @@ const Signup = () => {
               value={form.password}
               onChange={handleChange}
               required
-              className="w-full mt-2 px-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-600 outline-none transition"
+              className="w-full mt-2 px-4 py-3 border rounded-xl focus:ring-2 focus:ring-emerald-600 outline-none transition"
               placeholder="Create a strong password"
             />
 
@@ -219,7 +199,7 @@ const Signup = () => {
               value={form.confirmPassword}
               onChange={handleChange}
               required
-              className="w-full mt-2 px-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-600 outline-none transition"
+              className="w-full mt-2 px-4 py-3 border rounded-xl focus:ring-2 focus:ring-emerald-600 outline-none transition"
               placeholder="Confirm your password"
             />
 
@@ -235,7 +215,7 @@ const Signup = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-indigo-600 text-white py-3 rounded-xl hover:bg-indigo-700 transition font-semibold text-lg disabled:opacity-60"
+            className="w-full bg-emerald-600 text-white py-3 rounded-xl hover:bg-emerald-700 transition font-semibold text-lg disabled:opacity-60"
           >
             {loading ? "Creating Account..." : "Create Account"}
           </button>
@@ -243,7 +223,7 @@ const Signup = () => {
           {/* LOGIN LINK */}
           <p className="text-center mt-6">
             <span className="text-gray-500">Already have an account? </span>
-            <Link to="/login" className="text-indigo-600 hover:text-indigo-700 font-semibold">
+            <Link to="/login" className="text-emerald-700 hover:text-emerald-800 font-semibold">
               Sign In
             </Link>
           </p>

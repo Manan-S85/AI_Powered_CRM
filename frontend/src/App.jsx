@@ -7,6 +7,7 @@ import MLStatsSample from "./pages/MlStateSample";
 import Navbar from "./components/Navbar";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import Profile from "./pages/Profile";
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
                 <Route path="lead/:id" element={<LeadDetail />} />
                 <Route path="addleads" element={<AddLead />} />
                 <Route path="mlstats" element={<MLStatsSample />} />
+                <Route path="profile" element={<Profile />} />
               </Routes>
             </>
           }

@@ -91,6 +91,12 @@ class DevAuthService:
     def register_user(self, user_data: UserSignup) -> dict:
         """Register a new user in memory."""
         try:
+            if str(user_data.role).lower() != "admin":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Only admin accounts are allowed in this CRM system"
+                )
+
             # Check if user already exists
             if user_data.email in self.users:
                 raise HTTPException(
@@ -108,7 +114,7 @@ class DevAuthService:
                 "name": user_data.name,
                 "email": user_data.email,
                 "password": hashed_password,
-                "role": user_data.role,
+                "role": "admin",
                 "created_at": datetime.utcnow().isoformat(),
                 "is_active": True
             }
@@ -117,7 +123,7 @@ class DevAuthService:
             self.users[user_data.email] = user_doc
             
             # Create access token
-            token_data = {"sub": user_id, "email": user_data.email, "role": user_data.role}
+            token_data = {"sub": user_id, "email": user_data.email, "role": "admin"}
             access_token = self.create_access_token(token_data)
             
             # Return response
@@ -125,7 +131,7 @@ class DevAuthService:
                 id=user_id,
                 name=user_data.name,
                 email=user_data.email,
-                role=user_data.role,
+                role="admin",
                 created_at=user_doc["created_at"]
             )
             
@@ -169,6 +175,12 @@ class DevAuthService:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Account is disabled"
+                )
+
+            if str(user.get("role", "")).lower() != "admin":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Only admin accounts are allowed to access this CRM"
                 )
             
             # Create access token

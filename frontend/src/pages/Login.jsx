@@ -78,13 +78,13 @@ const Login = () => {
     <div className="min-h-screen flex">
       
       {/* LEFT PANEL — BRANDING */}
-      <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-indigo-700 via-purple-700 to-indigo-900 text-white flex-col justify-center px-20">
+      <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-slate-800 via-slate-700 to-emerald-800 text-white flex-col justify-center px-20">
   <div className="max-w-lg">
     <div className="flex items-center gap-4 mb-8">
       <h1 className="text-5xl font-bold tracking-tight">AI RECRUITER</h1>
     </div>
 
-    <p className="text-xl text-indigo-100 mb-8 leading-relaxed">
+    <p className="text-xl text-slate-200 mb-8 leading-relaxed">
       Identify high-converting leads instantly using machine learning.
       Make smarter sales decisions with real-time AI predictions.
     </p>
@@ -125,7 +125,7 @@ const Login = () => {
               value={form.email}
               onChange={handleChange}
               required
-              className="w-full mt-2 px-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-600 outline-none transition"
+              className="w-full mt-2 px-4 py-3 border rounded-xl focus:ring-2 focus:ring-emerald-600 outline-none transition"
               placeholder="admin@leadai.com"
             />
           </div>
@@ -142,7 +142,7 @@ const Login = () => {
               value={form.password}
               onChange={handleChange}
               required
-              className="w-full mt-2 px-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-600 outline-none transition"
+              className="w-full mt-2 px-4 py-3 border rounded-xl focus:ring-2 focus:ring-emerald-600 outline-none transition"
               placeholder="Enter your password"
             />
 
@@ -158,7 +158,7 @@ const Login = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-indigo-600 text-white py-3 rounded-xl hover:bg-indigo-700 transition font-semibold text-lg disabled:opacity-60"
+            className="w-full bg-emerald-600 text-white py-3 rounded-xl hover:bg-emerald-700 transition font-semibold text-lg disabled:opacity-60"
           >
             {loading ? "Signing in..." : "Sign In"}
           </button>
@@ -166,7 +166,7 @@ const Login = () => {
           {/* SIGNUP LINK */}
           <p className="text-center mt-6">
             <span className="text-gray-500">Don't have an account? </span>
-            <Link to="/signup" className="text-indigo-600 hover:text-indigo-700 font-semibold">
+            <Link to="/signup" className="text-emerald-700 hover:text-emerald-800 font-semibold">
               Sign Up
             </Link>
           </p>
