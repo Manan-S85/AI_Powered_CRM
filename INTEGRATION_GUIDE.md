@@ -103,7 +103,7 @@ Make sure your `.env` file is configured:
 
 ```env
 # Database Configuration
-MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/?appName=Cluster0
+MONGODB_URI=
 DB_NAME=ai_crm_db
 
 # Authentication Configuration
