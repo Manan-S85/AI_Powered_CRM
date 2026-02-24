@@ -126,143 +126,149 @@ export default function Dashboard() {
   };
 
   if (loading)
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-500 text-lg">Loading leads...</p>
-      </div>
-    );
-
-  if (error)
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
-        <p className="text-red-500">{error}</p>
-        <button
-          onClick={fetchLeads}
-          className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
-        >
-          Retry
-        </button>
-      </div>
-    );
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 p-8">
-      <div className="mb-8 flex justify-between items-center">
-        <div>
-          <h1 className="text-4xl font-bold text-gray-800">Leads Dashboard</h1>
-          <p className="text-gray-600 mt-2">Total Candidates: {leads.length}</p>
-        </div>
-        <button
-          onClick={fetchLeads}
-          className="px-5 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition shadow-md inline-flex items-center gap-2"
-        >
-          <RefreshCw size={16} />
-          Refresh
-        </button>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-950 to-black">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-14 w-14 border-b-2 border-emerald-500 mx-auto mb-6"></div>
+        <p className="text-slate-300 text-lg tracking-wide">
+          Loading AI Insights...
+        </p>
       </div>
-
-      {/* Info banner if leads exist but may be from old schema */}
-      {leads.length > 0 && leads.some(l => !l.highest_education || l.highest_education === 'N/A') && (
-        <div className="mb-6 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg">
-          <div className="flex items-center">
-            <span className="mr-3 text-yellow-600">
-              <Info size={24} />
-            </span>
-            <div>
-              <p className="text-yellow-800 font-medium">Legacy Data Detected</p>
-              <p className="text-yellow-700 text-sm mt-1">
-                Some leads are from an older format and may not display all fields. Add new candidates to see the full Google Sheets integration.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {leads.length === 0 ? (
-        <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
-          <p className="text-gray-500 text-lg mb-4">No leads found. Add your first candidate!</p>
-          <button
-            onClick={() => navigate("/addlead")}
-            className="px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition"
-          >
-            + Add Lead
-          </button>
-        </div>
-      ) : (
-        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-max">
-              <thead className="bg-gradient-to-r from-slate-700 to-emerald-700 text-white">
-                <tr>
-                  <th className="p-4 text-left font-semibold">Full Name</th>
-                  <th className="p-4 text-left font-semibold">Email</th>
-                  <th className="p-4 text-left font-semibold">Phone</th>
-                  <th className="p-4 text-left font-semibold">Education</th>
-                  <th className="p-4 text-left font-semibold">Position</th>
-                  <th className="p-4 text-left font-semibold">Experience</th>
-                  <th className="p-4 text-left font-semibold">Skills</th>
-                  <th className="p-4 text-left font-semibold">Location</th>
-                  <th className="p-4 text-left font-semibold">Salary</th>
-                  <th className="p-4 text-left font-semibold">Relocate</th>
-                  <th className="p-4 text-left font-semibold">ML Score</th>
-                  <th className="p-4 text-left font-semibold">Confidence</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {leads.map((lead, idx) => (
-                  <tr
-                    key={lead._id}
-                    onClick={() => navigate(`/lead/${lead._id}`)}
-                    className={`border-t hover:bg-slate-50 transition cursor-pointer ${
-                      idx % 2 === 0 ? "bg-gray-50" : "bg-white"
-                    }`}
-                  >
-                    <td className="p-4 font-semibold text-gray-800">{lead.name || "N/A"}</td>
-                    <td className="p-4 text-sm text-gray-600">{lead.email || "N/A"}</td>
-                    <td className="p-4 text-sm text-gray-600">{lead.phone || "N/A"}</td>
-                    <td className="p-4 text-sm text-gray-600">{lead.highest_education || "N/A"}</td>
-                    <td className="p-4 text-sm text-gray-700 font-medium">{lead.role_position || "N/A"}</td>
-                    <td className="p-4 text-sm text-gray-600">{lead.years_of_experience || 0} yrs</td>
-                    <td className="p-4 text-sm text-gray-600 max-w-xs truncate" title={lead.skills}>
-                      {lead.skills || "N/A"}
-                    </td>
-                    <td className="p-4 text-sm text-gray-600">{lead.location || "N/A"}</td>
-                    <td className="p-4 text-sm text-gray-700 font-medium">
-                      {formatSalaryINR(lead.expected_salary)}
-                    </td>
-                    <td className="p-4 text-sm">
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                          lead.willing_to_relocate === "Yes"
-                            ? "bg-green-100 text-green-700"
-                            : lead.willing_to_relocate === "No"
-                            ? "bg-red-100 text-red-700"
-                            : "bg-yellow-100 text-yellow-700"
-                        }`}
-                      >
-                        {lead.willing_to_relocate || "N/A"}
-                      </span>
-                    </td>
-                    <td className="p-4">
-                      <span
-                        className={`px-3 py-1 rounded-full text-sm font-bold ${temperatureColor(
-                          lead?.ml_prediction?.predicted_temperature
-                        )}`}
-                      >
-                        {lead?.ml_prediction?.predicted_temperature || "Cold"}
-                      </span>
-                    </td>
-                    <td className="p-4 text-sm font-semibold text-gray-700">
-                      {Math.round((lead?.ml_prediction?.confidence || 0) * 100)}%
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
     </div>
   );
+
+return (
+  <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white px-10 py-10">
+    
+    <div className="flex justify-between items-center mb-12">
+      <div>
+        <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+          AI Recruiter Dashboard
+        </h1>
+        <p className="text-slate-400 mt-3 text-lg">
+          Intelligent candidate scoring & analytics
+        </p>
+      </div>
+
+      <button
+        onClick={fetchLeads}
+        className="flex items-center gap-2 bg-emerald-600/90 hover:bg-emerald-600 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-lg shadow-emerald-600/20 hover:scale-105"
+      >
+        <RefreshCw size={16} />
+        Refresh
+      </button>
+    </div>
+
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+      
+      <div className="bg-white/5 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-2xl hover:shadow-emerald-500/10 transition">
+        <div className="flex items-center gap-5">
+          <Users className="text-emerald-400" size={34} />
+          <div>
+            <p className="text-slate-400 text-sm uppercase tracking-wider">
+              Total Candidates
+            </p>
+            <h2 className="text-3xl font-bold mt-1">{leads.length}</h2>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white/5 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-2xl hover:shadow-red-500/10 transition">
+        <div className="flex items-center gap-5">
+          <Briefcase className="text-red-400" size={34} />
+          <div>
+            <p className="text-slate-400 text-sm uppercase tracking-wider">
+              Hot Leads
+            </p>
+            <h2 className="text-3xl font-bold mt-1">
+              {leads.filter(l => l.ml_prediction?.predicted_temperature === "Hot").length}
+            </h2>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white/5 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-2xl hover:shadow-cyan-500/10 transition">
+        <div className="flex items-center gap-5">
+          <TrendingUp className="text-cyan-400" size={34} />
+          <div>
+            <p className="text-slate-400 text-sm uppercase tracking-wider">
+              Avg Confidence
+            </p>
+            <h2 className="text-3xl font-bold mt-1">
+              {Math.round(
+                leads.reduce((acc, l) => acc + (l.ml_prediction?.confidence || 0), 0) /
+                  leads.length *
+                  100
+              )}%
+            </h2>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div className="bg-white/5 backdrop-blur-2xl rounded-3xl border border-white/10 shadow-2xl overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-white/10 text-slate-300 text-sm uppercase tracking-wider">
+            <tr>
+              <th className="p-5 text-left">Candidate</th>
+              <th className="p-5 text-left">Role</th>
+              <th className="p-5 text-left">Experience</th>
+              <th className="p-5 text-left">Location</th>
+              <th className="p-5 text-left">Salary</th>
+              <th className="p-5 text-left">AI Score</th>
+              <th className="p-5 text-left">Confidence</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {leads.map((lead) => (
+              <tr
+                key={lead._id}
+                onClick={() => navigate(`/lead/${lead._id}`)}
+                className="border-t border-white/5 hover:bg-white/10 transition-all duration-300 cursor-pointer"
+              >
+                <td className="p-5">
+                  <p className="font-semibold text-lg">{lead.name}</p>
+                  <p className="text-sm text-slate-400 mt-1">{lead.email}</p>
+                </td>
+
+                <td className="p-5 font-medium text-slate-200">
+                  {lead.role_position}
+                </td>
+
+                <td className="p-5 text-slate-300">
+                  {lead.years_of_experience} yrs
+                </td>
+
+                <td className="p-5 text-slate-300">
+                  {lead.location}
+                </td>
+
+                <td className="p-5 font-semibold text-slate-200">
+                  {formatSalaryINR(lead.expected_salary)}
+                </td>
+
+                <td className="p-5">
+                  <span
+                    className={`px-4 py-1.5 rounded-full text-sm font-semibold ${temperatureColor(
+                      lead.ml_prediction?.predicted_temperature
+                    )}`}
+                  >
+                    {lead.ml_prediction?.predicted_temperature || "Cold"}
+                  </span>
+                </td>
+
+                <td className="p-5 font-bold text-emerald-400">
+                  {Math.round((lead.ml_prediction?.confidence || 0) * 100)}%
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+);
 }

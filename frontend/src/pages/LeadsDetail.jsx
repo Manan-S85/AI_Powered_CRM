@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../api/Api";
-import { ArrowLeft } from "lucide-react";
 
 export default function LeadDetail() {
   const { id } = useParams();
@@ -19,18 +18,7 @@ export default function LeadDetail() {
     try {
       setLoading(true);
       const res = await api.get(`/leads/${id}`);
-      const rawLead = res.data?.lead;
-
-      if (rawLead) {
-        setLead({
-          ...rawLead,
-          name: rawLead.name || rawLead.full_name || "N/A",
-          role_position: rawLead.role_position || rawLead.applied_position || rawLead.position || "N/A",
-          email: rawLead.email || "N/A",
-        });
-      } else {
-        setLead(null);
-      }
+      setLead(res.data?.lead);
       setError("");
     } catch (err) {
       setError("Failed to load lead details");
@@ -59,7 +47,7 @@ export default function LeadDetail() {
         <p className="text-red-500">{error}</p>
         <button
           onClick={fetchLead}
-          className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+          className="px-4 py-2 bg-indigo-600 text-white rounded-lg"
         >
           Retry
         </button>
@@ -70,61 +58,100 @@ export default function LeadDetail() {
   if (!lead) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+  <div className="min-h-screen bg-gradient-to-br from-[#0f172a] via-[#0b1120] to-black px-6 py-14">
+
+    <div className="max-w-5xl mx-auto">
+
       <button
         onClick={() => navigate(-1)}
-        className="mb-6 px-4 py-2 bg-white shadow rounded-lg hover:bg-gray-100 inline-flex items-center gap-2"
+        className="mb-8 px-6 py-2 rounded-xl bg-white/5 backdrop-blur border border-white/10 text-slate-300 hover:bg-white/10 transition"
       >
-        <ArrowLeft size={16} />
-        Back
+        ← Back
       </button>
 
-      <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow p-8">
-        <div className="flex justify-between items-start mb-6">
-          <div>
-            <h1 className="text-3xl font-bold">{lead.name}</h1>
-            <p className="text-gray-500">{lead.email}</p>
-          </div>
+      <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl p-10">
 
-          <span
-            className={`px-4 py-2 rounded-full font-semibold ${temperatureColor(
-              lead?.ml_prediction?.predicted_temperature
-            )}`}
-          >
-            {lead?.ml_prediction?.predicted_temperature}
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <p className="text-gray-500">Role</p>
-            <p className="font-semibold">{lead.role_position}</p>
-          </div>
+        <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-6 mb-10">
 
           <div>
-            <p className="text-gray-500">Confidence</p>
-            <p className="font-semibold">
-              {Math.round((lead?.ml_prediction?.confidence || 0) * 100)}%
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent">
+              {lead.name}
+            </h1>
+            <p className="text-slate-400 mt-2 text-lg">
+              {lead.email}
             </p>
           </div>
 
-          <div>
-            <p className="text-gray-500">Model Version</p>
-            <p className="font-semibold">
+          <div className="flex flex-col items-start md:items-end gap-4">
+            <span
+              className={`px-6 py-2 rounded-full font-semibold text-sm ${temperatureColor(
+                lead?.ml_prediction?.predicted_temperature
+              )}`}
+            >
+              {lead?.ml_prediction?.predicted_temperature}
+            </span>
+
+            <div className="text-sm text-slate-400">
+              Confidence Score
+              <div className="mt-2 w-40 h-2 bg-slate-700 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-cyan-400 to-emerald-400"
+                  style={{
+                    width: `${
+                      Math.round(
+                        (lead?.ml_prediction?.confidence || 0) * 100
+                      )
+                    }%`,
+                  }}
+                ></div>
+              </div>
+              <p className="mt-2 text-white font-medium">
+                {Math.round(
+                  (lead?.ml_prediction?.confidence || 0) * 100
+                )}%
+              </p>
+            </div>
+          </div>
+
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+          <div className="bg-[#1e293b]/60 border border-slate-700 rounded-2xl p-6">
+            <p className="text-slate-400 text-sm">Role Position</p>
+            <p className="text-xl font-semibold text-white mt-2">
+              {lead.role_position}
+            </p>
+          </div>
+
+          <div className="bg-[#1e293b]/60 border border-slate-700 rounded-2xl p-6">
+            <p className="text-slate-400 text-sm">Model Version</p>
+            <p className="text-xl font-semibold text-white mt-2">
               {lead?.ml_prediction?.model_version}
             </p>
           </div>
 
-          <div>
-            <p className="text-gray-500">Prediction Date</p>
-            <p className="font-semibold">
+          <div className="bg-[#1e293b]/60 border border-slate-700 rounded-2xl p-6">
+            <p className="text-slate-400 text-sm">Prediction Date</p>
+            <p className="text-lg font-semibold text-white mt-2">
               {new Date(
                 lead?.ml_prediction?.prediction_timestamp
               ).toLocaleString()}
             </p>
           </div>
+
+          <div className="bg-[#1e293b]/60 border border-slate-700 rounded-2xl p-6">
+            <p className="text-slate-400 text-sm">Lead ID</p>
+            <p className="text-lg font-semibold text-white mt-2">
+              {lead._id}
+            </p>
+          </div>
+
         </div>
+
       </div>
+
     </div>
-  );
+  </div>
+);
 }

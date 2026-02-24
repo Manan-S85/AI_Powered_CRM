@@ -47,51 +47,70 @@ export default function Profile() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-6 py-8">
-      <h1 className="text-2xl font-bold text-gray-900">Profile</h1>
-      <p className="text-gray-600 mt-1">Manage your basic account details.</p>
+  <div className="min-h-screen bg-gradient-to-br from-[#0f172a] via-[#0b1120] to-black flex justify-center px-6 py-16">
+
+    <div className="w-full max-w-4xl">
+
+      <div className="mb-10">
+        <h1 className="text-4xl font-bold bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent">
+          My Profile
+        </h1>
+        <p className="text-slate-400 mt-2">
+          Manage your account information and personal details.
+        </p>
+      </div>
 
       <form
         onSubmit={handleSave}
-        className="mt-6 bg-white border border-gray-200 rounded-xl p-6 shadow-sm"
+        className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-10 shadow-2xl"
       >
-        <div className="space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Email ID</label>
+
+        <div className="grid md:grid-cols-2 gap-8">
+
+          <div className="flex flex-col gap-2">
+            <label className="text-slate-400 text-sm">Email Address</label>
             <input
               type="email"
               value={user.email}
               readOnly
-              className="mt-2 w-full px-4 py-3 rounded-lg border border-gray-300 bg-gray-100 text-gray-700 cursor-not-allowed"
+              className="bg-[#1e293b] border border-slate-700 rounded-xl px-4 py-3 text-slate-400 cursor-not-allowed"
             />
-            <p className="text-xs text-gray-500 mt-1">Email cannot be changed.</p>
+            <p className="text-xs text-slate-500 mt-1">
+              Email cannot be changed.
+            </p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Name</label>
+          <div className="flex flex-col gap-2">
+            <label className="text-slate-400 text-sm">Full Name</label>
             <input
               type="text"
               value={nameInput}
               onChange={(event) => setNameInput(event.target.value)}
               placeholder="Enter your full name"
-              className="mt-2 w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+              className="bg-[#1e293b] border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-400 transition"
             />
           </div>
 
-          {message && (
-            <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg p-3">
-              {message}
-            </div>
-          )}
+        </div>
 
+        {message && (
+          <div className="mt-8 text-sm text-emerald-300 bg-emerald-500/10 border border-emerald-400/20 rounded-xl p-4">
+            {message}
+          </div>
+        )}
+
+        <div className="mt-10 flex justify-end">
           <button
             type="submit"
-            className="px-5 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium"
+            className="px-8 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 text-white font-medium hover:opacity-90 transition shadow-lg"
           >
-            Save Name
+            Save Changes
           </button>
         </div>
+
       </form>
+
     </div>
-  );
+  </div>
+);
 }
