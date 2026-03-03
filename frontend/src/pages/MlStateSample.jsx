@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import api from "../api/Api";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -20,17 +21,87 @@ ChartJS.register(
 );
 
 const MlStateSample = () => {
-  const stats = {
-    totalLeads: 1240,
-    predictedLeads: 1180,
-    coveragePercent: 95,
-    avgConfidence: 87,
+  const [stats, setStats] = useState({
+    totalLeads: 0,
+    predictedLeads: 0,
+    coveragePercent: 0,
+    avgConfidence: 0,
     tempDistribution: {
-      Hot: 320,
-      Warm: 540,
-      Cold: 380,
+      Hot: 0,
+      Warm: 0,
+      Cold: 0,
     },
+    lastUpdated: null,
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetchStats();
+  }, []);
+
+  const fetchStats = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const res = await api.get("/stats");
+      const apiStats = res.data?.stats || {};
+      const distribution = Array.isArray(apiStats.temperature_distribution)
+        ? apiStats.temperature_distribution
+        : [];
+
+      const tempMap = distribution.reduce(
+        (accumulator, item) => {
+          const label = String(item?._id || "");
+          const count = Number(item?.count || 0);
+          if (label === "Hot" || label === "Warm" || label === "Cold") {
+            accumulator[label] = count;
+          }
+          return accumulator;
+        },
+        { Hot: 0, Warm: 0, Cold: 0 }
+      );
+
+      const totalCountForConfidence = distribution.reduce(
+        (accumulator, item) => accumulator + Number(item?.count || 0),
+        0
+      );
+      const weightedConfidence = distribution.reduce(
+        (accumulator, item) =>
+          accumulator +
+          Number(item?.avg_confidence || 0) * Number(item?.count || 0),
+        0
+      );
+      const avgConfidence =
+        totalCountForConfidence > 0
+          ? Math.round((weightedConfidence / totalCountForConfidence) * 100)
+          : 0;
+
+      setStats({
+        totalLeads: Number(apiStats.total_leads || 0),
+        predictedLeads: Number(apiStats.total_predictions || 0),
+        coveragePercent: Math.round(Number(apiStats.coverage_percentage || 0)),
+        avgConfidence,
+        tempDistribution: tempMap,
+        lastUpdated: apiStats.last_updated || null,
+      });
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message || "Failed to load ML stats");
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const updatedDateLabel = useMemo(() => {
+    if (!stats.lastUpdated) {
+      return new Date().toLocaleDateString();
+    }
+    const parsedDate = new Date(stats.lastUpdated);
+    return Number.isNaN(parsedDate.getTime())
+      ? new Date().toLocaleDateString()
+      : parsedDate.toLocaleDateString();
+  }, [stats.lastUpdated]);
 
   const barData = {
     labels: ["Hot", "Warm", "Cold"],
@@ -74,6 +145,14 @@ const MlStateSample = () => {
     ],
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#0f172a] via-[#0b1120] to-black px-14 py-12 text-slate-200 flex items-center justify-center">
+        <p className="text-slate-300 text-lg">Loading live ML stats...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0f172a] via-[#0b1120] to-black px-14 py-12 text-slate-200">
 
@@ -89,9 +168,15 @@ const MlStateSample = () => {
 
         <div className="bg-emerald-500/10 border border-emerald-400/40 px-6 py-2 rounded-full text-sm text-emerald-400 flex items-center gap-3 shadow-lg">
           <span className="w-2 h-2 bg-emerald-400 rounded-full animate-ping"></span>
-          Model Active
+          {error ? "Using Last Known State" : "Model Active"}
         </div>
       </div>
+
+      {error && (
+        <div className="mb-8 bg-red-500/10 border border-red-400/40 text-red-300 px-5 py-3 rounded-xl text-sm">
+          {error}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-14">
 
@@ -163,7 +248,7 @@ const MlStateSample = () => {
 
             <div className="mt-8 pt-6 border-t border-white/10 text-slate-400 text-sm space-y-2">
               <p>Algorithm: Random Forest Classifier</p>
-              <p>Last Updated: {new Date().toLocaleDateString()}</p>
+              <p>Last Updated: {updatedDateLabel}</p>
               <p>Model Version: v2.4.1</p>
             </div>
 

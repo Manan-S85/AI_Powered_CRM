@@ -3,7 +3,7 @@ FastAPI service for ML predictions and lead management.
 This provides REST API endpoints for the frontend to access ML predictions.
 """
 
-from fastapi import FastAPI, HTTPException, Query, BackgroundTasks, Request
+from fastapi import FastAPI, HTTPException, Query, BackgroundTasks, Request, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
@@ -87,6 +87,13 @@ class PredictionStats(BaseModel):
     temperature_distribution: List[Dict[str, Any]]
     last_updated: str
 
+
+class AIInsightsGenerateResponse(BaseModel):
+    success: bool
+    insights: Dict[str, Any]
+    record_id: Optional[str] = None
+    stored: bool
+
 _cached_auth_service = None
 
 # API Routes
@@ -148,6 +155,17 @@ def get_auth_service():
         from auth_service_inmemory import dev_auth_service
         _cached_auth_service = dev_auth_service
         return _cached_auth_service
+
+
+def get_ai_insights_service():
+    """Lazy import AI insights service to avoid startup issues."""
+    try:
+        from ai_insights_service import get_ai_insights_service as resolver
+
+        return resolver()
+    except Exception as e:
+        logging.error(f"Failed to import AI insights service: {e}")
+        raise
     
     try:
         # Try MongoDB auth service
@@ -305,6 +323,38 @@ async def batch_predict_leads(
         logging.error(f"Error starting batch process: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.post("/ai-insights/generate", response_model=AIInsightsGenerateResponse, summary="Generate AI Sales Insights")
+async def generate_ai_insights(
+    source_type: str = Form(...),
+    conversation_text: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+):
+    """Generate structured AI sales insights from transcript/chat/notes and store in MongoDB."""
+    try:
+        file_name = file.filename if file else None
+        file_bytes = await file.read() if file else None
+
+        service = get_ai_insights_service()
+        result = service.generate_and_store(
+            source_type=source_type,
+            conversation_text=conversation_text,
+            file_name=file_name,
+            file_bytes=file_bytes,
+        )
+
+        return {
+            "success": True,
+            "insights": result["insights"],
+            "record_id": result.get("record_id"),
+            "stored": bool(result.get("stored")),
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logging.error(f"AI insights generation error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to generate AI insights")
+
 @app.get("/leads/hot", summary="Get Hot Leads")
 async def get_hot_leads(limit: int = Query(10, ge=1, le=50)):
     """Convenience endpoint to get hot leads."""
@@ -376,6 +426,7 @@ async def get_model_info():
 
 # Authentication endpoints
 @app.post("/auth/signup", summary="User Signup")
+@app.post("/api/auth/signup", summary="User Signup (Legacy)", include_in_schema=False)
 async def signup_user(user_data: UserSignupRequest):
     """Register a new user."""
     try:
@@ -407,6 +458,7 @@ async def signup_user(user_data: UserSignupRequest):
         raise HTTPException(status_code=500, detail=f"Failed to create account: {str(e)}")
 
 @app.post("/auth/login", summary="User Login")
+@app.post("/api/auth/login", summary="User Login (Legacy)", include_in_schema=False)
 async def login_user(login_data: UserLoginRequest):
     """Login a user."""
     try:

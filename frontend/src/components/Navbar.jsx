@@ -65,6 +65,7 @@ export default function Navbar() {
     { name: "Dashboard", path: "/dashboard" },
     { name: "Add Lead", path: "/addleads" },
     { name: "ML Stats", path: "/mlstats" },
+    { name: "AI Insights", path: "/ai-insights" },
   ];
 
   const handleLogout = () => {

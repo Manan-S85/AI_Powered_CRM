@@ -39,7 +39,7 @@ const Login = () => {
     setLoading(true);
 
     try {
-      const { data } = await API.post("/api/auth/login", form);
+      const { data } = await API.post("/auth/login", form);
 
       if (data.user.role !== "admin") {
         setError("Access denied. Admin privileges required.");
@@ -47,13 +47,14 @@ const Login = () => {
         return;
       }
 
-      localStorage.setItem("token", data.token);
+      localStorage.setItem("token", data.access_token);
       localStorage.setItem("role", data.user.role);
+      localStorage.setItem("user", JSON.stringify(data.user));
 
       navigate("/dashboard", { replace: true });
 
     } catch (err) {
-      setError(err.response?.data?.message || "Invalid email or password");
+      setError(err.response?.data?.detail || err.response?.data?.message || "Invalid email or password");
     }
 
     setLoading(false);

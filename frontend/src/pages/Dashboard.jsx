@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/Api";
-import { RefreshCw, Info } from "lucide-react";
+import { RefreshCw, Users, Briefcase, TrendingUp } from "lucide-react";
 
 export default function Dashboard() {
   const [leads, setLeads] = useState([]);
@@ -195,11 +195,13 @@ return (
               Avg Confidence
             </p>
             <h2 className="text-3xl font-bold mt-1">
-              {Math.round(
-                leads.reduce((acc, l) => acc + (l.ml_prediction?.confidence || 0), 0) /
-                  leads.length *
-                  100
-              )}%
+              {leads.length
+                ? Math.round(
+                    (leads.reduce((acc, l) => acc + (l.ml_prediction?.confidence || 0), 0) /
+                      leads.length) *
+                      100
+                  )
+                : 0}%
             </h2>
           </div>
         </div>
