@@ -1,265 +1,189 @@
-import React, { useEffect, useMemo, useState } from "react";
-import api from "../api/Api";
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  ArcElement,
-  Tooltip,
-  Legend,
-} from "chart.js";
-import { Bar, Pie, Doughnut } from "react-chartjs-2";
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { RefreshCw, Users, Briefcase, TrendingUp } from "lucide-react";
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  ArcElement,
-  Tooltip,
-  Legend
-);
+import img1 from "../assets/ai1.jpg";
+import img2 from "../assets/ai2.jpg";
+import img3 from "../assets/ai3.jpg";
 
-const MlStateSample = () => {
-  const [stats, setStats] = useState({
-    totalLeads: 0,
-    predictedLeads: 0,
-    coveragePercent: 0,
-    avgConfidence: 0,
-    tempDistribution: {
-      Hot: 0,
-      Warm: 0,
-      Cold: 0,
-    },
-    lastUpdated: null,
-  });
+export default function Dashboard() {
+  const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [currentBg, setCurrentBg] = useState(0);
+
+  const navigate = useNavigate();
+  const images = [img1, img2, img3];
+
+  // Mock data
+  const mockLeads = [
+    {
+      _id: "1",
+      name: "Deepak Yadav",
+      email: "deepak@example.com",
+      role_position: "Frontend Developer",
+      years_of_experience: 2,
+      location: "Jaipur",
+      expected_salary: 500000,
+      ml_prediction: { predicted_temperature: "Hot", confidence: 0.92 },
+    },
+    {
+      _id: "2",
+      name: "Rahul Sharma",
+      email: "rahul@example.com",
+      role_position: "Backend Developer",
+      years_of_experience: 3,
+      location: "Mumbai",
+      expected_salary: 700000,
+      ml_prediction: { predicted_temperature: "Warm", confidence: 0.78 },
+    },
+    {
+      _id: "3",
+      name: "Sneha Kapoor",
+      email: "sneha@example.com",
+      role_position: "Fullstack Developer",
+      years_of_experience: 4,
+      location: "Bangalore",
+      expected_salary: 900000,
+      ml_prediction: { predicted_temperature: "Cold", confidence: 0.55 },
+    },
+  ];
 
   useEffect(() => {
-    fetchStats();
+    // simulate API fetch
+    setTimeout(() => {
+      setLeads(mockLeads);
+      setLoading(false);
+    }, 1000);
   }, []);
 
-  const fetchStats = async () => {
-    try {
-      setLoading(true);
-      setError("");
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentBg((prev) => (prev + 1) % images.length);
+    }, 5000); // rotate background
+    return () => clearInterval(interval);
+  }, []);
 
-      const res = await api.get("/stats");
-      const apiStats = res.data?.stats || {};
-      const distribution = Array.isArray(apiStats.temperature_distribution)
-        ? apiStats.temperature_distribution
-        : [];
-
-      const tempMap = distribution.reduce(
-        (accumulator, item) => {
-          const label = String(item?._id || "");
-          const count = Number(item?.count || 0);
-          if (label === "Hot" || label === "Warm" || label === "Cold") {
-            accumulator[label] = count;
-          }
-          return accumulator;
-        },
-        { Hot: 0, Warm: 0, Cold: 0 }
-      );
-
-      const totalCountForConfidence = distribution.reduce(
-        (accumulator, item) => accumulator + Number(item?.count || 0),
-        0
-      );
-      const weightedConfidence = distribution.reduce(
-        (accumulator, item) =>
-          accumulator +
-          Number(item?.avg_confidence || 0) * Number(item?.count || 0),
-        0
-      );
-      const avgConfidence =
-        totalCountForConfidence > 0
-          ? Math.round((weightedConfidence / totalCountForConfidence) * 100)
-          : 0;
-
-      setStats({
-        totalLeads: Number(apiStats.total_leads || 0),
-        predictedLeads: Number(apiStats.total_predictions || 0),
-        coveragePercent: Math.round(Number(apiStats.coverage_percentage || 0)),
-        avgConfidence,
-        tempDistribution: tempMap,
-        lastUpdated: apiStats.last_updated || null,
-      });
-    } catch (err) {
-      setError(err.response?.data?.detail || err.message || "Failed to load ML stats");
-    } finally {
-      setLoading(false);
-    }
+  const temperatureColor = (temp) => {
+    if (temp === "Hot") return "bg-red-100 text-red-600";
+    if (temp === "Warm") return "bg-amber-100 text-amber-700";
+    return "bg-cyan-100 text-cyan-700";
   };
 
-  const updatedDateLabel = useMemo(() => {
-    if (!stats.lastUpdated) {
-      return new Date().toLocaleDateString();
-    }
-    const parsedDate = new Date(stats.lastUpdated);
-    return Number.isNaN(parsedDate.getTime())
-      ? new Date().toLocaleDateString()
-      : parsedDate.toLocaleDateString();
-  }, [stats.lastUpdated]);
-
-  const barData = {
-    labels: ["Hot", "Warm", "Cold"],
-    datasets: [
-      {
-        label: "Leads",
-        data: [
-          stats.tempDistribution.Hot,
-          stats.tempDistribution.Warm,
-          stats.tempDistribution.Cold,
-        ],
-        backgroundColor: ["#ef4444", "#facc15", "#38bdf8"],
-        borderRadius: 12,
-      },
-    ],
+  const formatSalaryINR = (value) => {
+    if (!value) return "N/A";
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 0,
+    }).format(value);
   };
 
-  const pieData = {
-    labels: ["Hot", "Warm", "Cold"],
-    datasets: [
-      {
-        data: [
-          stats.tempDistribution.Hot,
-          stats.tempDistribution.Warm,
-          stats.tempDistribution.Cold,
-        ],
-        backgroundColor: ["#ef4444", "#facc15", "#38bdf8"],
-        borderWidth: 0,
-      },
-    ],
-  };
-
-  const confidenceData = {
-    labels: ["Confidence", "Remaining"],
-    datasets: [
-      {
-        data: [stats.avgConfidence, 100 - stats.avgConfidence],
-        backgroundColor: ["#22c55e", "#1e293b"],
-        borderWidth: 0,
-      },
-    ],
-  };
-
-  if (loading) {
+  if (loading)
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0f172a] via-[#0b1120] to-black px-14 py-12 text-slate-200 flex items-center justify-center">
-        <p className="text-slate-300 text-lg">Loading live ML stats...</p>
+      <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
+        <img
+          src={images[currentBg]}
+          alt=""
+          className="absolute w-full h-full object-cover transition-all duration-1000"
+        />
+        <div className="absolute inset-0 bg-gradient-to-br from-black/80 via-indigo-900/70 to-purple-900/80" />
+        <div className="text-center relative z-10">
+          <div className="animate-spin rounded-full h-14 w-14 border-b-2 border-emerald-500 mx-auto mb-6"></div>
+          <p className="text-white text-lg tracking-wide">Loading AI Insights...</p>
+        </div>
       </div>
     );
-  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0f172a] via-[#0b1120] to-black px-14 py-12 text-slate-200">
+    <div className="min-h-screen relative overflow-hidden">
+      <img
+        src={images[currentBg]}
+        alt=""
+        className="absolute w-full h-full object-cover transition-all duration-1000"
+      />
+      <div className="absolute inset-0 bg-gradient-to-br from-black/80 via-indigo-900/70 to-purple-900/80" />
+      <div className="absolute w-96 h-96 bg-indigo-500 rounded-full blur-3xl opacity-20 -top-32 -left-32" />
+      <div className="absolute w-96 h-96 bg-purple-500 rounded-full blur-3xl opacity-20 -bottom-32 -right-32" />
 
-      <div className="flex justify-between items-center mb-14">
-        <div>
-          <h1 className="text-5xl font-bold bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent">
-            AI Lead Intelligence
-          </h1>
-          <p className="text-slate-400 mt-3 text-sm tracking-wide">
-            Real-time machine learning analytics dashboard
-          </p>
-        </div>
+      <div className="relative z-10 text-white px-10 py-10">
+        <div className="flex justify-between items-center mb-12">
+          <div>
+            <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+              AI Recruiter Dashboard
+            </h1>
+            <p className="text-slate-300 mt-3 text-lg">Intelligent candidate scoring & analytics</p>
+          </div>
 
-        <div className="bg-emerald-500/10 border border-emerald-400/40 px-6 py-2 rounded-full text-sm text-emerald-400 flex items-center gap-3 shadow-lg">
-          <span className="w-2 h-2 bg-emerald-400 rounded-full animate-ping"></span>
-          {error ? "Using Last Known State" : "Model Active"}
-        </div>
-      </div>
-
-      {error && (
-        <div className="mb-8 bg-red-500/10 border border-red-400/40 text-red-300 px-5 py-3 rounded-xl text-sm">
-          {error}
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-14">
-
-        {[
-          { label: "Total Leads", value: stats.totalLeads },
-          { label: "ML Predictions", value: stats.predictedLeads },
-          { label: "Coverage", value: stats.coveragePercent + "%" },
-          { label: "Avg Confidence", value: stats.avgConfidence + "%" },
-        ].map((item, index) => (
-          <div
-            key={index}
-            className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl hover:scale-[1.03] hover:border-cyan-400/30 transition duration-300"
+          <button
+            onClick={() => setLeads(mockLeads)}
+            className="flex items-center gap-2 bg-emerald-600/90 hover:bg-emerald-600 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-lg shadow-emerald-600/20 hover:scale-105"
           >
-            <p className="text-slate-400 text-xs uppercase tracking-wider">
-              {item.label}
-            </p>
-            <h2 className="text-4xl font-bold mt-4">{item.value}</h2>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 mb-12">
-
-        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-10 shadow-2xl">
-          <h3 className="text-xl font-semibold mb-8">
-            Lead Temperature Distribution
-          </h3>
-          <Bar data={barData} />
+            <RefreshCw size={16} />
+            Refresh
+          </button>
         </div>
 
-        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-10 shadow-2xl">
-          <h3 className="text-xl font-semibold mb-8">
-            Temperature Breakdown
-          </h3>
-          <Pie data={pieData} />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-
-        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-10 shadow-2xl">
-          <h3 className="text-xl font-semibold mb-8">
-            Prediction Confidence
-          </h3>
-          <Doughnut data={confidenceData} />
-        </div>
-
-        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-10 shadow-2xl">
-
-          <h3 className="text-xl font-semibold mb-10">
-            Model Insights
-          </h3>
-
-          <div className="space-y-6">
-
-            {[
-              { label: "Hot Leads", value: stats.tempDistribution.Hot, color: "text-red-400" },
-              { label: "Warm Leads", value: stats.tempDistribution.Warm, color: "text-yellow-400" },
-              { label: "Cold Leads", value: stats.tempDistribution.Cold, color: "text-cyan-400" },
-            ].map((item, index) => (
-              <div
-                key={index}
-                className="flex justify-between items-center bg-white/5 px-6 py-4 rounded-xl border border-white/10"
-              >
-                <span className={`${item.color}`}>{item.label}</span>
-                <span className="text-lg font-semibold">{item.value}</span>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+          <div className="bg-white/5 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-2xl hover:shadow-emerald-500/10 transition">
+            <div className="flex items-center gap-5">
+              <Users className="text-emerald-400" size={34} />
+              <div>
+                <p className="text-slate-300 text-sm uppercase tracking-wider">Total Candidates</p>
+                <h2 className="text-3xl font-bold mt-1">{leads.length}</h2>
               </div>
-            ))}
-
-            <div className="mt-8 pt-6 border-t border-white/10 text-slate-400 text-sm space-y-2">
-              <p>Algorithm: Random Forest Classifier</p>
-              <p>Last Updated: {updatedDateLabel}</p>
-              <p>Model Version: v2.4.1</p>
             </div>
-
           </div>
-
+          {/* You can add Hot Leads & Avg Confidence using same mock data */}
         </div>
 
+        <div className="bg-white/5 backdrop-blur-2xl rounded-3xl border border-white/10 shadow-2xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-white/10 text-slate-300 text-sm uppercase tracking-wider">
+                <tr>
+                  <th className="p-5 text-left">Candidate</th>
+                  <th className="p-5 text-left">Role</th>
+                  <th className="p-5 text-left">Experience</th>
+                  <th className="p-5 text-left">Location</th>
+                  <th className="p-5 text-left">Salary</th>
+                  <th className="p-5 text-left">AI Score</th>
+                  <th className="p-5 text-left">Confidence</th>
+                </tr>
+              </thead>
+              <tbody>
+                {leads.map((lead) => (
+                  <tr
+                    key={lead._id}
+                    onClick={() => navigate(`/lead/${lead._id}`)}
+                    className="border-t border-white/5 hover:bg-white/10 transition-all duration-300 cursor-pointer"
+                  >
+                    <td className="p-5">
+                      <p className="font-semibold text-lg">{lead.name}</p>
+                      <p className="text-sm text-slate-400 mt-1">{lead.email}</p>
+                    </td>
+                    <td className="p-5 font-medium text-slate-200">{lead.role_position}</td>
+                    <td className="p-5 text-slate-300">{lead.years_of_experience} yrs</td>
+                    <td className="p-5 text-slate-300">{lead.location}</td>
+                    <td className="p-5 font-semibold text-slate-200">{formatSalaryINR(lead.expected_salary)}</td>
+                    <td className="p-5">
+                      <span
+                        className={`px-4 py-1.5 rounded-full text-sm font-semibold ${temperatureColor(
+                          lead.ml_prediction?.predicted_temperature
+                        )}`}
+                      >
+                        {lead.ml_prediction?.predicted_temperature || "Cold"}
+                      </span>
+                    </td>
+                    <td className="p-5 font-bold text-emerald-400">
+                      {Math.round((lead.ml_prediction?.confidence || 0) * 100)}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
-
     </div>
   );
-};
-
-export default MlStateSample;
+}
