@@ -1,188 +1,191 @@
-import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { RefreshCw, Users, Briefcase, TrendingUp } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import api from "../api/Api";
+import { CheckCircle2 } from "lucide-react";
 
 import img1 from "../assets/ai1.jpg";
 import img2 from "../assets/ai2.jpg";
 import img3 from "../assets/ai3.jpg";
 
-export default function Dashboard() {
-  const [leads, setLeads] = useState([]);
-  const [loading, setLoading] = useState(true);
+export default function AddLead() {
+
+  const [lead, setLead] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    highest_education: "",
+    role_position: "",
+    years_of_experience: "",
+    skills: "",
+    location: "",
+    linkedin_profile: "",
+    expected_salary: "",
+    willing_to_relocate: "No",
+  });
+
+  const [loading, setLoading] = useState(false);
+  const [prediction, setPrediction] = useState(null);
+  const [error, setError] = useState("");
+
   const [currentBg, setCurrentBg] = useState(0);
 
-  const navigate = useNavigate();
   const images = [img1, img2, img3];
-
-  // Mock data
-  const mockLeads = [
-    {
-      _id: "1",
-      name: "Deepak Yadav",
-      email: "deepak@example.com",
-      role_position: "Frontend Developer",
-      years_of_experience: 2,
-      location: "Jaipur",
-      expected_salary: 500000,
-      ml_prediction: { predicted_temperature: "Hot", confidence: 0.92 },
-    },
-    {
-      _id: "2",
-      name: "Rahul Sharma",
-      email: "rahul@example.com",
-      role_position: "Backend Developer",
-      years_of_experience: 3,
-      location: "Mumbai",
-      expected_salary: 700000,
-      ml_prediction: { predicted_temperature: "Warm", confidence: 0.78 },
-    },
-    {
-      _id: "3",
-      name: "Sneha Kapoor",
-      email: "sneha@example.com",
-      role_position: "Fullstack Developer",
-      years_of_experience: 4,
-      location: "Bangalore",
-      expected_salary: 900000,
-      ml_prediction: { predicted_temperature: "Cold", confidence: 0.55 },
-    },
-  ];
-
-  useEffect(() => {
-    // simulate API fetch
-    setTimeout(() => {
-      setLeads(mockLeads);
-      setLoading(false);
-    }, 1000);
-  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentBg((prev) => (prev + 1) % images.length);
-    }, 5000); // rotate background
+    }, 5000);
+
     return () => clearInterval(interval);
   }, []);
 
-  const temperatureColor = (temp) => {
-    if (temp === "Hot") return "bg-red-100 text-red-600";
-    if (temp === "Warm") return "bg-amber-100 text-amber-700";
-    return "bg-cyan-100 text-cyan-700";
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+
+    setLead({
+      ...lead,
+      [name]: value,
+    });
   };
 
-  const formatSalaryINR = (value) => {
-    if (!value) return "N/A";
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR",
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
 
-  if (loading)
-    return (
-      <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
-        <img
-          src={images[currentBg]}
-          alt=""
-          className="absolute w-full h-full object-cover transition-all duration-1000"
-        />
-        <div className="absolute inset-0 bg-gradient-to-br from-black/80 via-indigo-900/70 to-purple-900/80" />
-        <div className="text-center relative z-10">
-          <div className="animate-spin rounded-full h-14 w-14 border-b-2 border-emerald-500 mx-auto mb-6"></div>
-          <p className="text-white text-lg tracking-wide">Loading AI Insights...</p>
-        </div>
-      </div>
-    );
+    try {
+      const payload = {
+        ...lead,
+        years_of_experience: Number(lead.years_of_experience),
+        expected_salary: Number(lead.expected_salary),
+      };
+
+      const response = await api.post("/predict", payload);
+
+      if (response.data.success) {
+        setPrediction(response.data.prediction);
+
+        setLead({
+          name: "",
+          email: "",
+          phone: "",
+          highest_education: "",
+          role_position: "",
+          years_of_experience: "",
+          skills: "",
+          location: "",
+          linkedin_profile: "",
+          expected_salary: "",
+          willing_to_relocate: "No",
+        });
+
+      } else {
+        setError("Failed to process lead");
+      }
+
+    } catch (err) {
+      setError(err.response?.data?.detail || "Failed to add lead");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
+
     <div className="min-h-screen relative overflow-hidden">
+
+      {/* Background Images */}
       <img
         src={images[currentBg]}
         alt=""
-        className="absolute w-full h-full object-cover transition-all duration-1000"
+        className="absolute w-full h-full object-cover transition-opacity duration-1000"
       />
+
+      {/* Dark Overlay */}
       <div className="absolute inset-0 bg-gradient-to-br from-black/80 via-indigo-900/70 to-purple-900/80" />
+
+      {/* Glow Effects */}
       <div className="absolute w-96 h-96 bg-indigo-500 rounded-full blur-3xl opacity-20 -top-32 -left-32" />
       <div className="absolute w-96 h-96 bg-purple-500 rounded-full blur-3xl opacity-20 -bottom-32 -right-32" />
 
-      <div className="relative z-10 text-white px-10 py-10">
-        <div className="flex justify-between items-center mb-12">
-          <div>
-            <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
-              AI Recruiter Dashboard
+      {/* Content */}
+      <div className="relative z-10 px-8 py-14 flex justify-center">
+
+        <div className="w-full max-w-6xl bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl p-12">
+
+          <div className="mb-12">
+            <h1 className="text-5xl font-extrabold bg-gradient-to-r from-emerald-400 via-cyan-400 to-blue-500 bg-clip-text text-transparent">
+              AI Candidate Intake
             </h1>
-            <p className="text-slate-300 mt-3 text-lg">Intelligent candidate scoring & analytics</p>
+            <p className="text-slate-300 mt-4 text-lg">
+              Submit candidate data and let the ML engine evaluate potential
+            </p>
           </div>
 
-          <button
-            onClick={() => setLeads(mockLeads)}
-            className="flex items-center gap-2 bg-emerald-600/90 hover:bg-emerald-600 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-lg shadow-emerald-600/20 hover:scale-105"
-          >
-            <RefreshCw size={16} />
-            Refresh
-          </button>
-        </div>
+          {error && (
+            <div className="mb-8 bg-red-500/10 border border-red-500/30 text-red-400 px-6 py-4 rounded-xl">
+              {error}
+            </div>
+          )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-          <div className="bg-white/5 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-2xl hover:shadow-emerald-500/10 transition">
-            <div className="flex items-center gap-5">
-              <Users className="text-emerald-400" size={34} />
-              <div>
-                <p className="text-slate-300 text-sm uppercase tracking-wider">Total Candidates</p>
-                <h2 className="text-3xl font-bold mt-1">{leads.length}</h2>
+          {prediction && (
+            <div className="mb-10 bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 border border-emerald-400/20 p-8 rounded-2xl">
+
+              <h3 className="text-xl font-semibold text-emerald-300 mb-6 flex items-center gap-3">
+                <CheckCircle2 size={22} />
+                ML Prediction Result
+              </h3>
+
+              <div className="grid grid-cols-2 gap-10">
+
+                <div>
+                  <p className="text-sm text-slate-400 uppercase">
+                    Temperature
+                  </p>
+                  <p className="text-4xl font-bold text-emerald-400 mt-2">
+                    {prediction.predicted_temperature}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-sm text-slate-400 uppercase">
+                    Confidence
+                  </p>
+
+                  <p className="text-4xl font-bold text-cyan-400 mt-2">
+                    {(prediction.confidence * 100).toFixed(1)}%
+                  </p>
+
+                  <div className="w-full bg-white/10 rounded-full h-3 mt-4">
+                    <div
+                      style={{ width: `${prediction.confidence * 100}%` }}
+                      className="h-full bg-gradient-to-r from-emerald-400 to-cyan-500"
+                    />
+                  </div>
+
+                </div>
               </div>
             </div>
-          </div>
-          {/* You can add Hot Leads & Avg Confidence using same mock data */}
+          )}
+
+          {/* FORM */}
+
+          <form onSubmit={handleSubmit}>
+            {/* keep your existing form fields exactly same */}
+
+            <div className="mt-12">
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-emerald-500 to-cyan-500 text-white py-4 rounded-2xl font-semibold text-lg hover:scale-105 transition-all duration-300 disabled:opacity-50 shadow-xl shadow-emerald-500/20"
+              >
+                {loading ? "Analyzing with AI..." : "Add Candidate & Generate ML Prediction"}
+              </button>
+            </div>
+
+          </form>
+
         </div>
 
-        <div className="bg-white/5 backdrop-blur-2xl rounded-3xl border border-white/10 shadow-2xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-white/10 text-slate-300 text-sm uppercase tracking-wider">
-                <tr>
-                  <th className="p-5 text-left">Candidate</th>
-                  <th className="p-5 text-left">Role</th>
-                  <th className="p-5 text-left">Experience</th>
-                  <th className="p-5 text-left">Location</th>
-                  <th className="p-5 text-left">Salary</th>
-                  <th className="p-5 text-left">AI Score</th>
-                  <th className="p-5 text-left">Confidence</th>
-                </tr>
-              </thead>
-              <tbody>
-                {leads.map((lead) => (
-                  <tr
-                    key={lead._id}
-                    onClick={() => navigate(`/lead/${lead._id}`)}
-                    className="border-t border-white/5 hover:bg-white/10 transition-all duration-300 cursor-pointer"
-                  >
-                    <td className="p-5">
-                      <p className="font-semibold text-lg">{lead.name}</p>
-                      <p className="text-sm text-slate-400 mt-1">{lead.email}</p>
-                    </td>
-                    <td className="p-5 font-medium text-slate-200">{lead.role_position}</td>
-                    <td className="p-5 text-slate-300">{lead.years_of_experience} yrs</td>
-                    <td className="p-5 text-slate-300">{lead.location}</td>
-                    <td className="p-5 font-semibold text-slate-200">{formatSalaryINR(lead.expected_salary)}</td>
-                    <td className="p-5">
-                      <span
-                        className={`px-4 py-1.5 rounded-full text-sm font-semibold ${temperatureColor(
-                          lead.ml_prediction?.predicted_temperature
-                        )}`}
-                      >
-                        {lead.ml_prediction?.predicted_temperature || "Cold"}
-                      </span>
-                    </td>
-                    <td className="p-5 font-bold text-emerald-400">
-                      {Math.round((lead.ml_prediction?.confidence || 0) * 100)}%
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
       </div>
     </div>
   );
