@@ -29,6 +29,7 @@ google-api-python-client
 python-dotenv
 pydantic-settings
 schedule
+requests
 
 # Google Sheets integration
 gspread
