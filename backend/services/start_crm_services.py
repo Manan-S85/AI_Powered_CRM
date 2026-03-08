@@ -40,7 +40,7 @@ class CRMServiceManager:
             print("🚀 Starting ML Prediction API...")
             
             # Start the FastAPI server
-            cmd = [sys.executable, "ml_prediction_api.py"]
+            cmd = [sys.executable, "main.py"]
             self.api_process = subprocess.Popen(
                 cmd,
                 cwd=os.path.dirname(__file__),
@@ -52,8 +52,8 @@ class CRMServiceManager:
             
             if self.api_process.poll() is None:
                 print("✅ ML Prediction API started successfully!")
-                print("🔗 API Documentation: http://localhost:8001/docs")
-                print("🔗 Health Check: http://localhost:8001/")
+                print("🔗 API Documentation: http://localhost:8000/docs")
+                print("🔗 Health Check: http://localhost:8000/")
             else:
                 print("❌ Failed to start ML Prediction API")
                 
@@ -142,7 +142,7 @@ class CRMServiceManager:
         
         # API Status
         if self.api_process and self.api_process.poll() is None:
-            print("🟢 ML Prediction API: Running (Port 8001)")
+            print("🟢 ML Prediction API: Running (Port 8000)")
         else:
             print("🔴 ML Prediction API: Not Running")
         
@@ -180,9 +180,9 @@ class CRMServiceManager:
         
         print("\\n🎉 All services started successfully!")
         print("\\nAvailable endpoints:")
-        print("   • ML API: http://localhost:8001")
-        print("   • API Docs: http://localhost:8001/docs")
-        print("   • Health Check: http://localhost:8001/")
+        print("   • ML API: http://localhost:8000")
+        print("   • API Docs: http://localhost:8000/docs")
+        print("   • Health Check: http://localhost:8000/")
         print("\\nPress Ctrl+C to stop all services")
         
         # Keep running

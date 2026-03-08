@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/Api";
-import { RefreshCw, Users, Briefcase, TrendingUp } from "lucide-react";
+import { RefreshCw, Users, Briefcase, TrendingUp, Eye } from "lucide-react";
 
 export default function Dashboard() {
   const [leads, setLeads] = useState([]);
@@ -84,6 +84,15 @@ export default function Dashboard() {
             willing_to_relocate:
               getValue("willing_to_relocate", "willing to relocate", "relocate") ||
               "N/A",
+            company_name:
+              getValue("company_name", "company name", "organization", "company") ||
+              "",
+            company_website:
+              getValue("company_website", "company website", "website", "organization_website") ||
+              "",
+            company_email:
+              getValue("company_email", "company email", "official_email") ||
+              "",
           };
         };
         
@@ -220,6 +229,7 @@ return (
               <th className="p-5 text-left">Salary</th>
               <th className="p-5 text-left">AI Score</th>
               <th className="p-5 text-left">Confidence</th>
+              <th className="p-5 text-left">Actions</th>
             </tr>
           </thead>
 
@@ -227,8 +237,7 @@ return (
             {leads.map((lead) => (
               <tr
                 key={lead._id}
-                onClick={() => navigate(`/lead/${lead._id}`)}
-                className="border-t border-white/5 hover:bg-white/10 transition-all duration-300 cursor-pointer"
+                className="border-t border-white/5 hover:bg-white/10 transition-all duration-300"
               >
                 <td className="p-5">
                   <p className="font-semibold text-lg">{lead.name}</p>
@@ -263,6 +272,18 @@ return (
 
                 <td className="p-5 font-bold text-emerald-400">
                   {Math.round((lead.ml_prediction?.confidence || 0) * 100)}%
+                </td>
+
+                <td className="p-5">
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/candidate/${lead.unique_id || lead._id}`)}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-cyan-400/30 text-cyan-300 hover:bg-cyan-500/10 transition"
+                    title="View Candidate Profile"
+                  >
+                    <Eye size={16} />
+                    View
+                  </button>
                 </td>
               </tr>
             ))}

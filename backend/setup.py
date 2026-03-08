@@ -32,9 +32,9 @@ def start_api_server():
         os.chdir("services")
         subprocess.run([
             sys.executable, "-m", "uvicorn", 
-            "ml_prediction_api:app", 
+            "main:app", 
             "--host", "0.0.0.0", 
-            "--port", "8001", 
+            "--port", "8000", 
             "--reload"
         ])
     except KeyboardInterrupt:

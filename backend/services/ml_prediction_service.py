@@ -36,25 +36,35 @@ class LeadScoringService:
             db_name = os.getenv('DB_NAME', 'ai_crm_db')
             
             if mongo_uri:
-                # Add timeout to prevent hangs - balanced timeouts for reliability
-                self.mongo_client = MongoClient(
-                    mongo_uri,
-                    serverSelectionTimeoutMS=5000,  # 5 second timeout for better reliability
-                    connectTimeoutMS=5000,
-                    socketTimeoutMS=10000,  # 10 seconds for queries
-                    maxPoolSize=10,
-                    minPoolSize=1,
-                    retryWrites=True,
-                    retryReads=True
-                )
+                candidate_client = None
                 # Test connection with timeout - retry 3 times
                 for attempt in range(3):
                     try:
-                        self.mongo_client.admin.command('ping', maxTimeMS=5000)
+                        # Keep min pool at 0 to avoid noisy background maintenance when network is unstable.
+                        candidate_client = MongoClient(
+                            mongo_uri,
+                            serverSelectionTimeoutMS=5000,
+                            connectTimeoutMS=5000,
+                            socketTimeoutMS=10000,
+                            maxPoolSize=10,
+                            minPoolSize=0,
+                            retryWrites=True,
+                            retryReads=True,
+                            directConnection=False,
+                        )
+                        candidate_client.admin.command('ping', maxTimeMS=5000)
+                        self.mongo_client = candidate_client
                         self.collection = self.mongo_client[db_name]['leads']
                         logging.info(f"[OK] ML Service connected to MongoDB (attempt {attempt+1})")
                         break
                     except Exception as conn_err:
+                        if candidate_client is not None:
+                            try:
+                                candidate_client.close()
+                            except Exception:
+                                pass
+                            candidate_client = None
+
                         if attempt == 2:  # Last attempt
                             logging.error(f"[ERROR] ML Service MongoDB connection failed: {conn_err}")
                             self.mongo_client = None

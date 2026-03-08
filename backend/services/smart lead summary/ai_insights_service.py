@@ -55,6 +55,12 @@ class AIInsightsService:
             logger.info("[AI Insights] MongoDB connected")
         except Exception as error:
             logger.error(f"[AI Insights] Failed to initialize MongoDB: {error}")
+            if self.mongo_client is not None:
+                try:
+                    self.mongo_client.close()
+                except Exception:
+                    pass
+                self.mongo_client = None
             self.collection = None
 
     def _extract_text_from_file(self, file_name: str, file_bytes: bytes, source_type: str) -> str:

@@ -1,7 +1,19 @@
 from flask import Flask, request, jsonify
-from services.domain_extractor import extract_domain
-from services.website_scraper import scrape_website
-from services.ai_processor import generate_summary
+import sys
+from pathlib import Path
+
+# Ensure local module imports keep working after folder reorganization.
+CURRENT_DIR = Path(__file__).resolve().parent
+BACKEND_DIR = CURRENT_DIR.parent.parent
+
+for candidate in (CURRENT_DIR, BACKEND_DIR):
+    candidate_str = str(candidate)
+    if candidate_str not in sys.path:
+        sys.path.append(candidate_str)
+
+from domain_extractor import extract_domain
+from website_scraper import scrape_website
+from ai_processor import generate_summary
 from utils.validator import validate_input
 
 app = Flask(__name__)

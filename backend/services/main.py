@@ -12,6 +12,8 @@ from datetime import datetime
 from bson import ObjectId
 import logging
 import os
+import importlib.util
+from pathlib import Path
 
 # DO NOT import services at module level - causes hangs!
 # from ml_prediction_service import lead_scoring_service
@@ -59,6 +61,11 @@ class LeadInput(BaseModel):
     linkedin_profile: Optional[str] = None
     expected_salary: Optional[int] = 0
     willing_to_relocate: Optional[str] = "No"
+
+    # Company details for enrichment workflow
+    company_name: Optional[str] = None
+    company_website: Optional[str] = None
+    company_email: Optional[EmailStr] = None
     
     # Legacy fields (optional for backward compatibility)
     availability: Optional[str] = None
@@ -94,7 +101,21 @@ class AIInsightsGenerateResponse(BaseModel):
     record_id: Optional[str] = None
     stored: bool
 
+
+class CompanyEnrichmentRequest(BaseModel):
+    company_name: str
+    company_website: Optional[str] = None
+    company_email: Optional[EmailStr] = None
+
+
+class CompanyEnrichmentResponse(BaseModel):
+    success: bool
+    company: str
+    domain: Optional[str]
+    intelligence: Dict[str, Any]
+
 _cached_auth_service = None
+_lead_enrichment_modules = None
 
 # API Routes
 @app.get("/", summary="Health Check")
@@ -156,39 +177,88 @@ def get_auth_service():
         _cached_auth_service = dev_auth_service
         return _cached_auth_service
 
-
-def get_ai_insights_service():
-    """Lazy import AI insights service to avoid startup issues."""
-    try:
-        from ai_insights_service import get_ai_insights_service as resolver
-
-        return resolver()
-    except Exception as e:
-        logging.error(f"Failed to import AI insights service: {e}")
-        raise
-    
     try:
         # Try MongoDB auth service
         from auth_service import get_auth_service as get_db_auth_service
         auth = get_db_auth_service()
-        
+
         # Check if MongoDB is actually connected
         if auth.users_collection is not None:
             logging.info("[OK] Using MongoDB auth service")
             _cached_auth_service = auth
             return _cached_auth_service
-        else:
-            logging.warning("[WARN] MongoDB not connected, using in-memory auth")
-            from auth_service_inmemory import dev_auth_service
-            _cached_auth_service = dev_auth_service
-            return _cached_auth_service
-        
+
+        logging.warning("[WARN] MongoDB not connected, using in-memory auth")
+        from auth_service_inmemory import dev_auth_service
+        _cached_auth_service = dev_auth_service
+        return _cached_auth_service
+
     except Exception as e:
         # Fall back to in-memory auth for development
         logging.warning(f"[FALLBACK] MongoDB auth failed ({e}), using in-memory auth")
         from auth_service_inmemory import dev_auth_service
         _cached_auth_service = dev_auth_service
         return _cached_auth_service
+
+
+def _load_module_from_path(module_name: str, file_path: Path):
+    """Load a Python module from an explicit file path."""
+    spec = importlib.util.spec_from_file_location(module_name, str(file_path))
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Unable to build import spec for {file_path}")
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def get_lead_enrichment_modules() -> Dict[str, Any]:
+    """Load moved lead enrichment modules from folder with spaces in its name."""
+    global _lead_enrichment_modules
+
+    if _lead_enrichment_modules is not None:
+        return _lead_enrichment_modules
+
+    service_dir = Path(__file__).resolve().parent
+    enrichment_dir = service_dir / "lead data enrichment"
+
+    if not enrichment_dir.exists():
+        raise ImportError(f"Lead enrichment directory not found at {enrichment_dir}")
+
+    ai_processor = _load_module_from_path("lead_enrichment_ai_processor", enrichment_dir / "ai_processor.py")
+    domain_extractor = _load_module_from_path("lead_enrichment_domain_extractor", enrichment_dir / "domain_extractor.py")
+    website_scraper = _load_module_from_path("lead_enrichment_website_scraper", enrichment_dir / "website_scraper.py")
+
+    _lead_enrichment_modules = {
+        "generate_company_intelligence": getattr(ai_processor, "generate_company_intelligence"),
+        "extract_domain": getattr(domain_extractor, "extract_domain"),
+        "scrape_website": getattr(website_scraper, "scrape_website"),
+    }
+    return _lead_enrichment_modules
+
+
+def get_ai_insights_service():
+    """Lazy import AI insights service to avoid startup issues."""
+    try:
+        # Prefer direct import when file exists in services root.
+        from ai_insights_service import get_ai_insights_service as resolver
+        return resolver()
+    except Exception as e:
+        logging.warning(f"Primary AI insights import failed, attempting fallback path load: {e}")
+
+    service_dir = Path(__file__).resolve().parent
+    fallback_path = service_dir / "smart lead summary" / "ai_insights_service.py"
+
+    if not fallback_path.exists():
+        raise ImportError(f"AI insights service file not found at {fallback_path}")
+
+    module = _load_module_from_path("ai_insights_service_fallback", fallback_path)
+    resolver = getattr(module, "get_ai_insights_service", None)
+
+    if resolver is None:
+        raise ImportError("Fallback AI insights module does not expose get_ai_insights_service")
+
+    return resolver()
 
 @app.post("/predict", response_model=Dict[str, Any], summary="Predict Lead Temperature")
 async def predict_lead_temperature(lead: LeadInput):
@@ -246,6 +316,36 @@ async def get_lead(unique_id: str):
     except Exception as e:
         logging.error(f"Error fetching lead: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/candidate/{candidate_id}", summary="Get Candidate by Unique ID or Mongo ID")
+async def get_candidate(candidate_id: str):
+    """Retrieve a candidate by unique_id first, then fallback to MongoDB _id."""
+    try:
+        ml_service = get_ml_service()
+
+        lead = ml_service.get_lead_with_prediction(candidate_id)
+        if not lead and getattr(ml_service, "collection", None) is not None:
+            try:
+                lead = ml_service.collection.find_one({"_id": ObjectId(candidate_id)})
+            except Exception:
+                lead = None
+
+        if not lead:
+            raise HTTPException(status_code=404, detail="Candidate not found")
+
+        if "_id" in lead:
+            lead["_id"] = str(lead["_id"])
+
+        return {
+            "success": True,
+            "candidate": lead,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error fetching candidate: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch candidate")
 
 @app.get("/leads/temperature/{temperature}", summary="Get Leads by Temperature")
 async def get_leads_by_temperature(
@@ -354,6 +454,37 @@ async def generate_ai_insights(
     except Exception as e:
         logging.error(f"AI insights generation error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to generate AI insights")
+
+
+@app.post("/lead-enrichment/enrich-company", response_model=CompanyEnrichmentResponse, summary="Enrich Company Data")
+async def enrich_company_data(payload: CompanyEnrichmentRequest):
+    """Generate AI company intelligence from company inputs using moved enrichment modules."""
+    try:
+        modules = get_lead_enrichment_modules()
+
+        company = payload.company_name.strip()
+        website = (payload.company_website or "").strip()
+        email = str(payload.company_email).strip() if payload.company_email else ""
+
+        if not company:
+            raise HTTPException(status_code=400, detail="company_name is required")
+
+        domain = modules["extract_domain"](email, website)
+        website_content = modules["scrape_website"](website) if website else ""
+        intelligence = modules["generate_company_intelligence"](company, website_content)
+
+        return {
+            "success": True,
+            "company": company,
+            "domain": domain,
+            "intelligence": intelligence,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Lead enrichment error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to enrich company data")
 
 @app.get("/leads/hot", summary="Get Hot Leads")
 async def get_hot_leads(limit: int = Query(10, ge=1, le=50)):

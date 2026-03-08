@@ -30,6 +30,7 @@ python-dotenv
 pydantic-settings
 schedule
 requests
+beautifulsoup4
 
 # Google Sheets integration
 gspread

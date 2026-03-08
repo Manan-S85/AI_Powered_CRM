@@ -5,6 +5,7 @@ import LeadDetail from "./pages/LeadsDetail";
 import AddLead from "./pages/AddLead";
 import MLStatsSample from "./pages/MlStateSample";
 import AIInsights from "./pages/AIInsights";
+import CandidateProfile from "./pages/CandidateProfile";
 import Navbar from "./components/Navbar";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -29,6 +30,7 @@ function App() {
                 <Route path="dashboard" element={<Dashboard />} />
                 <Route path="lead/edit/:id" element={<EditLead />} />
                 <Route path="lead/:id" element={<LeadDetail />} />
+                <Route path="candidate/:candidate_id" element={<CandidateProfile />} />
                 <Route path="addleads" element={<AddLead />} />
                 <Route path="mlstats" element={<MLStatsSample />} />
                 <Route path="ai-insights" element={<AIInsights />} />

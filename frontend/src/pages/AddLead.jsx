@@ -16,6 +16,9 @@ export default function AddLead() {
     linkedin_profile: "",
     expected_salary: "",
     willing_to_relocate: "No",
+    company_name: "",
+    company_website: "",
+    company_email: "",
   });
 
   const [loading, setLoading] = useState(false);
@@ -40,6 +43,7 @@ export default function AddLead() {
         ...lead,
         years_of_experience: Number(lead.years_of_experience),
         expected_salary: Number(lead.expected_salary),
+        company_email: lead.company_email?.trim() ? lead.company_email.trim() : null,
       };
 
       const response = await api.post("/predict", payload);
@@ -61,6 +65,9 @@ export default function AddLead() {
           linkedin_profile: "",
           expected_salary: "",
           willing_to_relocate: "No",
+          company_name: "",
+          company_website: "",
+          company_email: "",
         });
       } else {
         setError("Failed to process lead");
@@ -279,6 +286,42 @@ export default function AddLead() {
               <option className="bg-slate-900">No</option>
               <option className="bg-slate-900">Maybe</option>
             </select>
+          </div>
+
+          <div>
+            <label className="text-sm text-slate-400 uppercase tracking-wider">Company Name</label>
+            <input
+              type="text"
+              name="company_name"
+              value={lead.company_name}
+              onChange={handleChange}
+              className="mt-2 w-full px-5 py-3 bg-white/10 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-emerald-400 transition"
+              placeholder="Acme Pvt Ltd"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm text-slate-400 uppercase tracking-wider">Company Website</label>
+            <input
+              type="url"
+              name="company_website"
+              value={lead.company_website}
+              onChange={handleChange}
+              className="mt-2 w-full px-5 py-3 bg-white/10 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-emerald-400 transition"
+              placeholder="https://example.com"
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="text-sm text-slate-400 uppercase tracking-wider">Company Email</label>
+            <input
+              type="email"
+              name="company_email"
+              value={lead.company_email}
+              onChange={handleChange}
+              className="mt-2 w-full px-5 py-3 bg-white/10 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-emerald-400 transition"
+              placeholder="contact@example.com"
+            />
           </div>
 
         </div>
