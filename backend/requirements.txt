@@ -1,0 +1,36 @@
+# FastAPI and async MongoDB
+fastapi
+uvicorn[standard]
+motor
+python-multipart
+pydantic[email]
+
+# Authentication (using Python built-ins: hashlib, secrets, jwt)
+PyJWT
+python-jose[cryptography]
+
+# Original Flask (still available)
+flask
+pymongo
+
+# ML Dependencies  
+scikit-learn
+pandas
+joblib
+scipy
+
+# Google APIs
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client
+
+# Environment and utilities
+python-dotenv
+pydantic-settings
+schedule
+requests
+
+# Google Sheets integration
+gspread
+oauth2client
