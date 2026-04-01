@@ -50,10 +50,14 @@ export default function Navbar() {
     { name: "Dashboard", path: "/dashboard" },
     { name: "Add Lead", path: "/addleads" },
     { name: "ML Stats", path: "/mlstats" },
+    { name: "AI Insights", path: "/ai-insights" },
+    { name: "Chatbot", path: "/chatbot" },
   ];
 
   const handleLogout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    localStorage.removeItem("role");
     navigate("/login");
   };
 
@@ -63,19 +67,19 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="sticky top-0 z-50 bg-transparent backdrop-blur-md border-b border-white/10">
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="flex justify-between items-center h-20">
+    <nav className="sticky top-0 z-50 border-b border-slate-700/60 bg-slate-950/85 backdrop-blur-xl">
+      <div className="max-w-7xl mx-auto px-4 md:px-6">
+        <div className="flex justify-between items-center h-20 gap-4">
 
           {/* Logo */}
-          <div className="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent select-none">
+          <div className="text-xl md:text-2xl font-extrabold tracking-tight bg-gradient-to-r from-cyan-300 to-emerald-300 bg-clip-text text-transparent select-none whitespace-nowrap">
             AI Recruiter
           </div>
 
           {/* Nav Links */}
-          <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl p-1.5 backdrop-blur-lg">
+          <div className="hidden lg:flex items-center gap-2 bg-slate-900/70 border border-slate-700/70 rounded-2xl p-1.5 backdrop-blur-lg">
             {navItems.map((item) => {
-              const isActive = location.pathname === item.path;
+              const isActive = location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
               return (
                 <Link
                   key={item.name}
@@ -83,7 +87,26 @@ export default function Navbar() {
                   className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300
                     ${isActive
                       ? "bg-gradient-to-r from-cyan-500 to-emerald-500 text-white shadow-lg"
-                      : "text-white/80 hover:bg-white/10 hover:text-white"
+                      : "text-slate-200 hover:bg-slate-800 hover:text-white"
+                    }`}
+                >
+                  {item.name}
+                </Link>
+              );
+            })}
+          </div>
+
+          <div className="lg:hidden flex items-center gap-2 overflow-x-auto max-w-[52vw] no-scrollbar">
+            {navItems.map((item) => {
+              const isActive = location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
+              return (
+                <Link
+                  key={item.name}
+                  to={item.path}
+                  className={`px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition
+                    ${isActive
+                      ? "bg-gradient-to-r from-cyan-500 to-emerald-500 text-white"
+                      : "bg-slate-900/70 text-slate-200 border border-slate-700/70"
                     }`}
                 >
                   {item.name}
@@ -105,16 +128,16 @@ export default function Navbar() {
               </button>
 
               {isProfileOpen && (
-                <div className="absolute right-0 mt-3 w-44 rounded-2xl bg-transparent backdrop-blur-xl border border-white/10 shadow-2xl py-2 z-50">
+                <div className="absolute right-0 mt-3 w-44 rounded-2xl bg-slate-900/95 backdrop-blur-xl border border-slate-700/70 shadow-2xl py-2 z-50">
                   <button
                     type="button"
                     onClick={handleGoToProfile}
-                    className="w-full text-left px-5 py-3 text-sm font-medium text-white/80 hover:bg-white/10 hover:text-white transition"
+                    className="w-full text-left px-5 py-3 text-sm font-medium text-slate-200 hover:bg-slate-800 transition"
                   >
                     Profile
                   </button>
 
-                  <div className="border-t border-white/10 my-1"></div>
+                  <div className="border-t border-slate-700 my-1"></div>
 
                   <button
                     onClick={handleLogout}

@@ -1,234 +1,197 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import { CheckCircle2, Loader2 } from "lucide-react";
 import api from "../api/Api";
-import { CheckCircle2 } from "lucide-react";
 
-import img1 from "../assets/ai1.jpg";
-import img2 from "../assets/ai2.jpg";
-import img3 from "../assets/ai3.jpg";
+const initialLead = {
+  name: "",
+  email: "",
+  phone: "",
+  highest_education: "",
+  role_position: "",
+  years_of_experience: "",
+  skills: "",
+  location: "",
+  linkedin_profile: "",
+  expected_salary: "",
+  willing_to_relocate: "No",
+  company_name: "",
+  company_website: "",
+  company_email: "",
+};
 
 export default function AddLead() {
-
-  const [lead, setLead] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    highest_education: "",
-    role_position: "",
-    years_of_experience: "",
-    skills: "",
-    location: "",
-    linkedin_profile: "",
-    expected_salary: "",
-    willing_to_relocate: "No",
-    company_name: "",
-    company_website: "",
-    company_email: "",
-  });
-
+  const [lead, setLead] = useState(initialLead);
   const [loading, setLoading] = useState(false);
   const [prediction, setPrediction] = useState(null);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
-  const [currentBg, setCurrentBg] = useState(0);
-
-  const images = [img1, img2, img3];
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentBg((prev) => (prev + 1) % images.length);
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-
-    setLead({
-      ...lead,
-      [name]: value,
-    });
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setLead((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     setLoading(true);
     setError("");
+    setSuccessMessage("");
 
     try {
       const payload = {
         ...lead,
-        years_of_experience: Number(lead.years_of_experience),
-        expected_salary: Number(lead.expected_salary),
+        years_of_experience: lead.years_of_experience ? Number(lead.years_of_experience) : 0,
+        expected_salary: lead.expected_salary ? Number(lead.expected_salary) : 0,
         company_email: lead.company_email?.trim() ? lead.company_email.trim() : null,
       };
 
       const response = await api.post("/predict", payload);
-
-      if (response.data.success) {
-        setPrediction(response.data.prediction);
-
-        setLead({
-          name: "",
-          email: "",
-          phone: "",
-          highest_education: "",
-          role_position: "",
-          years_of_experience: "",
-          skills: "",
-          location: "",
-          linkedin_profile: "",
-          expected_salary: "",
-          willing_to_relocate: "No",
-          company_name: "",
-          company_website: "",
-          company_email: "",
-        });
-
-      } else {
-        setError("Failed to process lead");
+      if (!response.data?.success) {
+        throw new Error("Lead submission failed");
       }
 
-    } catch (err) {
-      setError(err.response?.data?.detail || "Failed to add lead");
+      setPrediction(response.data.prediction || null);
+      setSuccessMessage("Lead added and scored successfully.");
+      setLead(initialLead);
+    } catch (requestError) {
+      setError(requestError.response?.data?.detail || requestError.message || "Failed to add lead");
     } finally {
       setLoading(false);
     }
   };
 
+  const confidence = prediction?.confidence ? (prediction.confidence * 100).toFixed(1) : null;
+
   return (
-
-    <div className="min-h-screen relative overflow-hidden">
-
-      {/* Background Images */}
-      <img
-        src={images[currentBg]}
-        alt=""
-        className="absolute w-full h-full object-cover transition-opacity duration-1000"
-      />
-
-      {/* Dark Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-br from-black/80 via-indigo-900/70 to-purple-900/80" />
-
-      {/* Glow Effects */}
-      <div className="absolute w-96 h-96 bg-indigo-500 rounded-full blur-3xl opacity-20 -top-32 -left-32" />
-      <div className="absolute w-96 h-96 bg-purple-500 rounded-full blur-3xl opacity-20 -bottom-32 -right-32" />
-
-      {/* Content */}
-      <div className="relative z-10 px-8 py-14 flex justify-center">
-
-        <div className="w-full max-w-6xl bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl p-12">
-
-          <div className="mb-12">
-            <h1 className="text-5xl font-extrabold bg-gradient-to-r from-emerald-400 via-cyan-400 to-blue-500 bg-clip-text text-transparent">
-              AI Candidate Intake
-            </h1>
-            <p className="text-slate-300 mt-4 text-lg">
-              Submit candidate data and let the ML engine evaluate potential
-            </p>
-          </div>
-
-          {error && (
-            <div className="mb-8 bg-red-500/10 border border-red-500/30 text-red-400 px-6 py-4 rounded-xl">
-              {error}
-            </div>
-          )}
-
-          {prediction && (
-            <div className="mb-10 bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 border border-emerald-400/20 p-8 rounded-2xl">
-
-              <h3 className="text-xl font-semibold text-emerald-300 mb-6 flex items-center gap-3">
-                <CheckCircle2 size={22} />
-                ML Prediction Result
-              </h3>
-
-              <div className="grid grid-cols-2 gap-10">
-
-                <div>
-                  <p className="text-sm text-slate-400 uppercase">
-                    Temperature
-                  </p>
-                  <p className="text-4xl font-bold text-emerald-400 mt-2">
-                    {prediction.predicted_temperature}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-sm text-slate-400 uppercase">
-                    Confidence
-                  </p>
-
-                  <p className="text-4xl font-bold text-cyan-400 mt-2">
-                    {(prediction.confidence * 100).toFixed(1)}%
-                  </p>
-
-                  <div className="w-full bg-white/10 rounded-full h-3 mt-4">
-                    <div
-                      style={{ width: `${prediction.confidence * 100}%` }}
-                      className="h-full bg-gradient-to-r from-emerald-400 to-cyan-500"
-                    />
-                  </div>
-
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* FORM */}
-
-          <form onSubmit={handleSubmit}>
-            {/* keep your existing form fields exactly same */}
-
-            <div className="mt-12">
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-gradient-to-r from-emerald-500 to-cyan-500 text-white py-4 rounded-2xl font-semibold text-lg hover:scale-105 transition-all duration-300 disabled:opacity-50 shadow-xl shadow-emerald-500/20"
-              >
-                {loading ? "Analyzing with AI..." : "Add Candidate & Generate ML Prediction"}
-              </button>
-            </div>
-
-          </form>
-
-          <div>
-            <label className="text-sm text-slate-400 uppercase tracking-wider">Company Name</label>
-            <input
-              type="text"
-              name="company_name"
-              value={lead.company_name}
-              onChange={handleChange}
-              className="mt-2 w-full px-5 py-3 bg-white/10 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-emerald-400 transition"
-              placeholder="Acme Pvt Ltd"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm text-slate-400 uppercase tracking-wider">Company Website</label>
-            <input
-              type="url"
-              name="company_website"
-              value={lead.company_website}
-              onChange={handleChange}
-              className="mt-2 w-full px-5 py-3 bg-white/10 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-emerald-400 transition"
-              placeholder="https://example.com"
-            />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="text-sm text-slate-400 uppercase tracking-wider">Company Email</label>
-            <input
-              type="email"
-              name="company_email"
-              value={lead.company_email}
-              onChange={handleChange}
-              className="mt-2 w-full px-5 py-3 bg-white/10 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-emerald-400 transition"
-              placeholder="contact@example.com"
-            />
-          </div>
-
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.09),_transparent_35%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.09),_transparent_40%),linear-gradient(180deg,_#020617_0%,_#0f172a_45%,_#020617_100%)] px-6 md:px-10 py-8 md:py-10 text-white">
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-8 md:mb-10">
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-emerald-300 via-cyan-300 to-blue-300 bg-clip-text text-transparent">
+            Add Lead
+          </h1>
+          <p className="text-slate-400 mt-2 text-base">Capture candidate details and run instant ML lead-temperature scoring.</p>
         </div>
 
+        <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-8">
+          <section className="bg-white/[0.04] border border-white/10 rounded-2xl p-6 md:p-7 backdrop-blur-xl shadow-[0_20px_60px_-35px_rgba(15,23,42,0.9)]">
+            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">Name</label>
+                <input type="text" name="name" value={lead.name} onChange={handleChange} required className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm" placeholder="Candidate full name" />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">Email</label>
+                <input type="email" name="email" value={lead.email} onChange={handleChange} required className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm" placeholder="candidate@email.com" />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">Phone</label>
+                <input type="text" name="phone" value={lead.phone} onChange={handleChange} className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm" placeholder="+91 XXXXX XXXXX" />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">Role Position</label>
+                <input type="text" name="role_position" value={lead.role_position} onChange={handleChange} required className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm" placeholder="Backend Developer" />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">Highest Education</label>
+                <input type="text" name="highest_education" value={lead.highest_education} onChange={handleChange} className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm" placeholder="B.Tech / MCA / etc." />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">Experience (Years)</label>
+                <input type="number" min="0" name="years_of_experience" value={lead.years_of_experience} onChange={handleChange} className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm" placeholder="3" />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">Location</label>
+                <input type="text" name="location" value={lead.location} onChange={handleChange} className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm" placeholder="Bangalore" />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">Expected Salary (INR)</label>
+                <input type="number" min="0" name="expected_salary" value={lead.expected_salary} onChange={handleChange} className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm" placeholder="1200000" />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">Skills</label>
+                <textarea name="skills" value={lead.skills} onChange={handleChange} rows={3} className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm" placeholder="Python, FastAPI, React, SQL..." />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">LinkedIn Profile</label>
+                <input type="url" name="linkedin_profile" value={lead.linkedin_profile} onChange={handleChange} className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm" placeholder="https://linkedin.com/in/..." />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">Willing To Relocate</label>
+                <select name="willing_to_relocate" value={lead.willing_to_relocate} onChange={handleChange} className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm">
+                  <option value="No">No</option>
+                  <option value="Yes">Yes</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">Company Name</label>
+                <input type="text" name="company_name" value={lead.company_name} onChange={handleChange} className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm" placeholder="Acme Pvt Ltd" />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">Company Website</label>
+                <input type="url" name="company_website" value={lead.company_website} onChange={handleChange} className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm" placeholder="https://company.com" />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">Company Email</label>
+                <input type="email" name="company_email" value={lead.company_email} onChange={handleChange} className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm" placeholder="hello@company.com" />
+              </div>
+
+              <div className="md:col-span-2 pt-2">
+                <button type="submit" disabled={loading} className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-cyan-600 px-4 py-3 text-sm font-semibold hover:from-emerald-500 hover:to-cyan-500 transition disabled:opacity-70">
+                  {loading ? <Loader2 size={16} className="animate-spin" /> : null}
+                  {loading ? "Analyzing Lead..." : "Add Lead and Generate Prediction"}
+                </button>
+              </div>
+            </form>
+          </section>
+
+          <aside className="bg-white/[0.04] border border-white/10 rounded-2xl p-6 md:p-7 backdrop-blur-xl shadow-[0_20px_60px_-35px_rgba(15,23,42,0.9)]">
+            <h2 className="text-base font-semibold text-slate-200 mb-4">Prediction Result</h2>
+
+            {error ? <div className="mb-4 rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div> : null}
+            {successMessage ? (
+              <div className="mb-4 rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+                {successMessage}
+              </div>
+            ) : null}
+
+            {prediction ? (
+              <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/5 p-5">
+                <p className="text-sm text-slate-400 mb-2">Lead Temperature</p>
+                <p className="text-3xl font-bold text-emerald-300">{prediction.predicted_temperature}</p>
+
+                <p className="text-sm text-slate-400 mt-5 mb-2">Confidence</p>
+                <p className="text-2xl font-semibold text-cyan-300">{confidence}%</p>
+                <div className="mt-3 h-2 w-full rounded-full bg-slate-800">
+                  <div className="h-2 rounded-full bg-gradient-to-r from-emerald-500 to-cyan-500" style={{ width: `${confidence || 0}%` }} />
+                </div>
+
+                <div className="mt-5 text-xs text-slate-400 leading-6">
+                  <p className="inline-flex items-center gap-2 text-emerald-300">
+                    <CheckCircle2 size={14} />
+                    Lead saved and scored by ML service.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-slate-700 bg-slate-950/60 p-5 text-sm text-slate-400 leading-6">
+                Submit the form to view prediction output, confidence score, and quality signal for this lead.
+              </div>
+            )}
+          </aside>
+        </div>
       </div>
     </div>
   );

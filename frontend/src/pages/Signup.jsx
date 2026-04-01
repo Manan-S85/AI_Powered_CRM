@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import API from "../api/Api";
 import { Eye, EyeOff } from "lucide-react";
+import img1 from "../assets/ai1.jpg";
 
 
 const Signup = () => {
@@ -55,6 +56,7 @@ const Signup = () => {
         localStorage.setItem("token", token);
         localStorage.setItem("role", userRole);
         localStorage.setItem("user", JSON.stringify(data.user));
+        window.dispatchEvent(new Event("userUpdated"));
 
         navigate("/dashboard", { replace: true });
       } else {
@@ -82,7 +84,7 @@ const Signup = () => {
     <div className="relative min-h-screen flex items-center justify-center overflow-hidden">
 
       <img
-        src={hero}
+        src={img1}
         alt=""
         className="absolute w-full h-full object-cover"
       />

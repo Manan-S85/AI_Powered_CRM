@@ -41,20 +41,26 @@ const Login = () => {
     try {
       const { data } = await API.post("/auth/login", form);
 
-      if (data.user.role !== "admin") {
+      if ((data?.user?.role || "").toLowerCase() !== "admin") {
         setError("Access denied. Admin privileges required.");
         setLoading(false);
         return;
       }
 
-      localStorage.setItem("token", data.access_token);
+      const token = data.access_token;
+      if (!token) {
+        throw new Error("Missing access token in login response");
+      }
+
+      localStorage.setItem("token", token);
       localStorage.setItem("role", data.user.role);
       localStorage.setItem("user", JSON.stringify(data.user));
+      window.dispatchEvent(new Event("userUpdated"));
 
       navigate("/dashboard", { replace: true });
 
     } catch (err) {
-      setError(err.response?.data?.detail || err.response?.data?.message || "Invalid email or password");
+      setError(err.response?.data?.detail || err.response?.data?.message || err.message || "Invalid email or password");
     }
 
     setLoading(false);
