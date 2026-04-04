@@ -73,7 +73,7 @@ export default function Navbar() {
 
           {/* Logo */}
           <div className="text-xl md:text-2xl font-extrabold tracking-tight bg-gradient-to-r from-cyan-300 to-emerald-300 bg-clip-text text-transparent select-none whitespace-nowrap">
-            AI Recruiter
+            Detagenix CRM System
           </div>
 
           {/* Nav Links */}

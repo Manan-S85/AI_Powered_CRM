@@ -2,6 +2,25 @@ import React, { useState } from "react";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import api from "../api/Api";
 
+const formatApiError = (requestError) => {
+  const detail = requestError?.response?.data?.detail;
+
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        const fieldPath = Array.isArray(item?.loc) ? item.loc.join(" -> ") : "field";
+        return `${fieldPath}: ${item?.msg || "Invalid value"}`;
+      })
+      .join(" | ");
+  }
+
+  if (typeof detail === "string" && detail.trim()) {
+    return detail;
+  }
+
+  return requestError?.message || "Failed to add lead";
+};
+
 const initialLead = {
   name: "",
   email: "",
@@ -40,6 +59,12 @@ export default function AddLead() {
     try {
       const payload = {
         ...lead,
+        phone: lead.phone?.trim() ? lead.phone.trim() : null,
+        skills: lead.skills?.trim() ? lead.skills.trim() : null,
+        location: lead.location?.trim() ? lead.location.trim() : null,
+        linkedin_profile: lead.linkedin_profile?.trim() ? lead.linkedin_profile.trim() : null,
+        company_name: lead.company_name?.trim() ? lead.company_name.trim() : null,
+        company_website: lead.company_website?.trim() ? lead.company_website.trim() : null,
         years_of_experience: lead.years_of_experience ? Number(lead.years_of_experience) : 0,
         expected_salary: lead.expected_salary ? Number(lead.expected_salary) : 0,
         company_email: lead.company_email?.trim() ? lead.company_email.trim() : null,
@@ -53,8 +78,12 @@ export default function AddLead() {
       setPrediction(response.data.prediction || null);
       setSuccessMessage("Lead added and scored successfully.");
       setLead(initialLead);
+
+      // Notify dashboard views to refetch leads immediately.
+      localStorage.setItem("crm:lastLeadAddedAt", String(Date.now()));
+      window.dispatchEvent(new CustomEvent("crm:lead-added"));
     } catch (requestError) {
-      setError(requestError.response?.data?.detail || requestError.message || "Failed to add lead");
+      setError(formatApiError(requestError));
     } finally {
       setLoading(false);
     }

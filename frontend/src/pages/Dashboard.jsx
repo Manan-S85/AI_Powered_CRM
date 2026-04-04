@@ -138,7 +138,7 @@ export default function Dashboard() {
         <div className="flex justify-between items-center mb-12">
           <div>
             <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
-              AI Recruiter Dashboard
+              Detagenix CRM Dashboard
             </h1>
             <p className="text-slate-300 mt-3 text-lg">Intelligent candidate scoring and analytics</p>
           </div>

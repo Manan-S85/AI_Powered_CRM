@@ -6,7 +6,7 @@ This provides REST API endpoints for the frontend to access ML predictions.
 from fastapi import FastAPI, HTTPException, Query, BackgroundTasks, Request, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ValidationError
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from bson import ObjectId
@@ -65,7 +65,7 @@ class LeadInput(BaseModel):
     # Company details for enrichment workflow
     company_name: Optional[str] = None
     company_website: Optional[str] = None
-    company_email: Optional[EmailStr] = None
+    company_email: Optional[str] = None
     
     # Legacy fields (optional for backward compatibility)
     availability: Optional[str] = None
@@ -261,12 +261,43 @@ def get_ai_insights_service():
     return resolver()
 
 @app.post("/predict", response_model=Dict[str, Any], summary="Predict Lead Temperature")
-async def predict_lead_temperature(lead: LeadInput):
+async def predict_lead_temperature(payload: Dict[str, Any]):
     """
     Predict the temperature (Hot/Warm/Cold) for a new lead.
     """
     try:
-        # Convert to dict
+        # Normalize empty strings to None for optional fields.
+        normalized_payload = {
+            key: (value.strip() if isinstance(value, str) else value)
+            for key, value in (payload or {}).items()
+        }
+
+        for optional_field in [
+            "phone",
+            "highest_education",
+            "skills",
+            "location",
+            "linkedin_profile",
+            "company_name",
+            "company_website",
+            "company_email",
+            "availability",
+            "interview_status",
+            "resume_upload",
+        ]:
+            if normalized_payload.get(optional_field) == "":
+                normalized_payload[optional_field] = None
+
+        if normalized_payload.get("years_of_experience") in ["", None]:
+            normalized_payload["years_of_experience"] = 0
+        if normalized_payload.get("expected_salary") in ["", None]:
+            normalized_payload["expected_salary"] = 0
+
+        try:
+            lead = LeadInput.model_validate(normalized_payload)
+        except ValidationError as validation_error:
+            raise HTTPException(status_code=400, detail=validation_error.errors())
+
         lead_data = lead.model_dump()
         
         # Process with ML (lazy loaded)
@@ -285,7 +316,8 @@ async def predict_lead_temperature(lead: LeadInput):
             "prediction": result['ml_prediction'],
             "message": "Lead temperature predicted successfully"
         }
-        
+    except HTTPException:
+        raise
     except Exception as e:
         logging.error(f"Error in predict endpoint: {e}")
         raise HTTPException(status_code=500, detail=str(e))
