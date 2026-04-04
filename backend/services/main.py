@@ -12,6 +12,7 @@ from datetime import datetime
 from bson import ObjectId
 import logging
 import os
+from email_generator import router as email_router
 import importlib.util
 from pathlib import Path
 
@@ -34,6 +35,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(email_router)
 
 # Pydantic models for request/response
 class UserSignupRequest(BaseModel):
