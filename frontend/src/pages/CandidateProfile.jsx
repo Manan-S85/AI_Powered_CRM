@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import api from "../api/Api";
+import SmartEmailGeneratorModal from "../components/SmartEmailGeneratorModal";
 
 const initialIntelligence = {
   industry: "Unknown",
@@ -23,6 +24,7 @@ export default function CandidateProfile() {
   const [enriching, setEnriching] = useState(false);
   const [enrichmentError, setEnrichmentError] = useState("");
   const [intelligence, setIntelligence] = useState(initialIntelligence);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchCandidate = async () => {
@@ -111,14 +113,31 @@ export default function CandidateProfile() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white px-6 md:px-10 py-8 md:py-10">
       <div className="max-w-6xl mx-auto space-y-7">
-        <button
-          type="button"
-          onClick={() => navigate("/dashboard")}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-white/15 bg-white/5 text-slate-200 hover:bg-white/10 transition"
-        >
-          <ArrowLeft size={16} />
-          Back to Dashboard
-        </button>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => navigate("/dashboard")}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-white/15 bg-white/5 text-slate-200 hover:bg-white/10 transition"
+          >
+            <ArrowLeft size={16} />
+            Back to Dashboard
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsEmailModalOpen(true)}
+            disabled={!candidate?.unique_id}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-semibold transition disabled:opacity-60"
+            title={
+              candidate?.unique_id
+                ? "Generate contextual follow-up email"
+                : "Lead unique_id missing"
+            }
+          >
+            <Sparkles size={16} />
+            Generate Follow-up
+          </button>
+        </div>
 
         <section className="bg-white/5 border border-white/10 rounded-2xl p-6 md:p-8 backdrop-blur-xl">
           <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-emerald-300 to-cyan-300 bg-clip-text text-transparent">
@@ -126,6 +145,7 @@ export default function CandidateProfile() {
           </h1>
 
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <InfoCard label="Lead ID" value={candidate.unique_id || candidate._id || "N/A"} />
             <InfoCard label="Full Name" value={candidate.name || "N/A"} />
             <InfoCard label="Email" value={candidate.email || "N/A"} />
             <InfoCard label="Mobile" value={candidate.phone || "N/A"} />
@@ -202,6 +222,13 @@ export default function CandidateProfile() {
           </div>
         </section>
       </div>
+
+      <SmartEmailGeneratorModal
+        isOpen={isEmailModalOpen}
+        onClose={() => setIsEmailModalOpen(false)}
+        uniqueId={candidate?.unique_id}
+        leadName={candidate?.name}
+      />
     </div>
   );
 }

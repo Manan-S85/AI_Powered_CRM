@@ -1,4 +1,5 @@
 flask
 requests
+httpx
 beautifulsoup4
 openai

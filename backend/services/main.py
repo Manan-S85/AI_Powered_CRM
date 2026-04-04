@@ -13,6 +13,9 @@ from bson import ObjectId
 import logging
 import os
 from email_generator import router as email_router
+from followup_service import router as followup_router
+from client_ltv import router as clv_router
+from sales_forecasting import generate_sales_forecast_report
 import importlib.util
 from pathlib import Path
 
@@ -37,6 +40,8 @@ app.add_middleware(
 )
 
 app.include_router(email_router)
+app.include_router(followup_router)
+app.include_router(clv_router)
 
 # Pydantic models for request/response
 class UserSignupRequest(BaseModel):
@@ -116,6 +121,11 @@ class CompanyEnrichmentResponse(BaseModel):
     company: str
     domain: Optional[str]
     intelligence: Dict[str, Any]
+
+
+class ChatbotChatRequest(BaseModel):
+    user_input: str
+    user_context: Optional[Dict[str, Any]] = None
 
 _cached_auth_service = None
 _lead_enrichment_modules = None
@@ -433,6 +443,33 @@ async def get_prediction_statistics():
         logging.error(f"Error getting stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.get("/sales-forecast", response_model=Dict[str, Any], summary="Get Sales Forecast")
+async def get_sales_forecast(
+    limit: int = Query(500, ge=20, le=2000),
+    months: int = Query(6, ge=3, le=24),
+):
+    """Generate sales forecasting metrics for revenue, pipeline health, and closure trends."""
+    try:
+        ml_service = get_ml_service()
+        leads = ml_service.get_all_leads_with_predictions(limit)
+
+        # Ensure JSON-safe Mongo IDs for downstream consumers.
+        for lead in leads:
+            if isinstance(lead, dict) and '_id' in lead and isinstance(lead['_id'], ObjectId):
+                lead['_id'] = str(lead['_id'])
+
+        forecast = generate_sales_forecast_report(leads, months=months)
+
+        return {
+            "success": True,
+            "forecast": forecast,
+            "count": len(leads),
+        }
+    except Exception as e:
+        logging.error(f"Error generating sales forecast: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to generate sales forecast")
+
 @app.post("/batch-predict", summary="Batch Process Leads")
 async def batch_predict_leads(
     background_tasks: BackgroundTasks,
@@ -520,6 +557,34 @@ async def enrich_company_data(payload: CompanyEnrichmentRequest):
     except Exception as e:
         logging.error(f"Lead enrichment error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to enrich company data")
+
+
+@app.post("/chatbot/chat", summary="CRM Chatbot Tool Router")
+async def chatbot_chat(payload: ChatbotChatRequest):
+    """Handle chatbot prompts and route to CRM tools via Gemini tool-calling."""
+    try:
+        from chatbot import handle_chat_request_async
+
+        context = payload.user_context if isinstance(payload.user_context, dict) else {}
+        result = await handle_chat_request_async(payload.user_input, context)
+
+        # Always return conversation memory so frontend can persist context.
+        conversation_memory = context.get("conversation_memory", {})
+        if isinstance(result, dict):
+            result_data = result.get("data")
+            if isinstance(result_data, dict):
+                if "conversation_memory" not in result_data:
+                    result["data"] = {**result_data, "conversation_memory": conversation_memory}
+            else:
+                result["data"] = {
+                    "conversation_memory": conversation_memory,
+                    "result": result_data,
+                }
+
+        return result
+    except Exception as e:
+        logging.error(f"Chatbot request failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Chatbot service unavailable")
 
 @app.get("/leads/hot", summary="Get Hot Leads")
 async def get_hot_leads(limit: int = Query(10, ge=1, le=50)):

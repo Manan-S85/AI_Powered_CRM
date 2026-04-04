@@ -1,4 +1,18 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import {
+  BarChart3,
+  Bot,
+  BrainCircuit,
+  ChevronLeft,
+  ChevronRight,
+  Handshake,
+  LayoutDashboard,
+  Menu,
+  Sparkles,
+  TrendingUp,
+  UserPlus,
+  UserRound,
+} from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 const getStoredUser = () => {
@@ -19,12 +33,11 @@ const getNameInitials = (name) => {
     : `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 };
 
-export default function Navbar() {
+export default function Navbar({ isCollapsed = false, onToggleCollapse = () => {} }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [initials, setInitials] = useState("U");
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const profileMenuRef = useRef(null);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
   useEffect(() => {
     const updateInitials = () => {
@@ -37,21 +50,18 @@ export default function Navbar() {
   }, []);
 
   useEffect(() => {
-    const handleOutsideClick = (event) => {
-      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
-        setIsProfileOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
-  }, []);
+    setIsMobileNavOpen(false);
+  }, [location.pathname]);
 
   const navItems = [
-    { name: "Dashboard", path: "/dashboard" },
-    { name: "Add Lead", path: "/addleads" },
-    { name: "ML Stats", path: "/mlstats" },
-    { name: "AI Insights", path: "/ai-insights" },
-    { name: "Chatbot", path: "/chatbot" },
+    { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
+    { name: "Add Lead", path: "/addleads", icon: UserPlus },
+    { name: "ML Stats", path: "/mlstats", icon: BrainCircuit },
+    { name: "AI Insights", path: "/ai-insights", icon: Sparkles },
+    { name: "Sales Forecast", path: "/sales-forecasting", icon: TrendingUp },
+    { name: "Client LTV", path: "/client-ltv", icon: BarChart3 },
+    { name: "Follow-up AI", path: "/followup-optimizer", icon: Handshake },
+    { name: "Chatbot", path: "/chatbot", icon: Bot },
   ];
 
   const handleLogout = () => {
@@ -62,96 +72,174 @@ export default function Navbar() {
   };
 
   const handleGoToProfile = () => {
-    setIsProfileOpen(false);
+    setIsMobileNavOpen(false);
     navigate("/profile");
   };
 
+  const navLinkClass = (isActive, collapsed = false) =>
+    `group flex items-center rounded-xl py-2.5 text-sm font-medium transition-all duration-200 ${
+      collapsed ? "justify-center px-0" : "justify-between px-3.5"
+    } ${
+      isActive
+        ? "bg-cyan-500/15 text-cyan-200 ring-1 ring-cyan-400/30"
+        : "text-slate-300 hover:bg-white/5 hover:text-white"
+    }`;
+
   return (
-    <nav className="sticky top-0 z-50 border-b border-slate-700/60 bg-slate-950/85 backdrop-blur-xl">
-      <div className="max-w-7xl mx-auto px-4 md:px-6">
-        <div className="flex justify-between items-center h-20 gap-4">
+    <>
+      <button
+        type="button"
+        onClick={() => setIsMobileNavOpen(true)}
+        className="fixed left-4 top-4 z-40 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-slate-950/80 text-slate-100 shadow-xl backdrop-blur-xl transition hover:bg-slate-900 lg:hidden"
+        aria-label="Open sidebar"
+      >
+        <Menu size={18} />
+      </button>
 
-          {/* Logo */}
-          <div className="text-xl md:text-2xl font-extrabold tracking-tight bg-gradient-to-r from-cyan-300 to-emerald-300 bg-clip-text text-transparent select-none whitespace-nowrap">
-            Detagenix CRM System
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 hidden border-r border-white/10 bg-slate-950/90 backdrop-blur-2xl transition-all duration-300 lg:flex lg:flex-col ${
+          isCollapsed ? "w-24" : "w-72"
+        }`}
+      >
+        <div className={`pb-5 pt-7 ${isCollapsed ? "px-3" : "px-6"}`}>
+          <div className={`flex items-start ${isCollapsed ? "justify-center" : "justify-between gap-3"}`}>
+            <div className={isCollapsed ? "hidden" : "block"}>
+              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-cyan-300/90">Detagenix</p>
+              <h2 className="mt-2 text-2xl font-bold tracking-tight text-white">Enterprise CRM</h2>
+              <p className="mt-2 text-sm text-slate-400">Pipeline intelligence and workflow automation.</p>
+            </div>
+
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-200 transition hover:bg-white/[0.08]"
+              title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+            </button>
           </div>
+        </div>
 
-          {/* Nav Links */}
-          <div className="hidden lg:flex items-center gap-2 bg-slate-900/70 border border-slate-700/70 rounded-2xl p-1.5 backdrop-blur-lg">
+        <nav className="px-4 py-2">
+          <ul className="space-y-1.5">
             {navItems.map((item) => {
-              const isActive = location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
+              const Icon = item.icon;
+              const isActive =
+                location.pathname === item.path ||
+                location.pathname.startsWith(`${item.path}/`);
+
               return (
-                <Link
-                  key={item.name}
-                  to={item.path}
-                  className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300
-                    ${isActive
-                      ? "bg-gradient-to-r from-cyan-500 to-emerald-500 text-white shadow-lg"
-                      : "text-slate-200 hover:bg-slate-800 hover:text-white"
-                    }`}
-                >
-                  {item.name}
-                </Link>
+                <li key={item.name}>
+                  <Link to={item.path} className={navLinkClass(isActive, isCollapsed)} title={item.name}>
+                    <span className={`inline-flex items-center gap-3 ${isCollapsed ? "justify-center" : ""}`}>
+                      <Icon size={16} />
+                      {isCollapsed ? null : <span>{item.name}</span>}
+                    </span>
+                    {isCollapsed || !isActive ? null : <span className="h-1.5 w-1.5 rounded-full bg-cyan-300" />}
+                  </Link>
+                </li>
               );
             })}
-          </div>
+          </ul>
+        </nav>
 
-          <div className="lg:hidden flex items-center gap-2 overflow-x-auto max-w-[52vw] no-scrollbar">
-            {navItems.map((item) => {
-              const isActive = location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
-              return (
-                <Link
-                  key={item.name}
-                  to={item.path}
-                  className={`px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition
-                    ${isActive
-                      ? "bg-gradient-to-r from-cyan-500 to-emerald-500 text-white"
-                      : "bg-slate-900/70 text-slate-200 border border-slate-700/70"
-                    }`}
-                >
-                  {item.name}
-                </Link>
-              );
-            })}
-          </div>
+        <div className={`mt-auto border-t border-white/10 py-5 ${isCollapsed ? "px-3" : "px-4"}`}>
+          <button
+            type="button"
+            onClick={handleGoToProfile}
+            className={`mb-2 inline-flex w-full items-center rounded-xl border border-white/10 bg-white/[0.03] py-2.5 text-left text-sm font-medium text-slate-200 transition hover:bg-white/[0.08] ${
+              isCollapsed ? "justify-center px-0" : "gap-3 px-3.5"
+            }`}
+            title="Profile"
+          >
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500 to-emerald-500 text-xs font-bold text-white">
+              {initials}
+            </span>
+            {isCollapsed ? null : <span>Profile</span>}
+          </button>
 
-          {/* Right Section */}
-          <div className="flex items-center gap-4">
-            <div className="relative" ref={profileMenuRef}>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className={`w-full rounded-xl border border-white/10 bg-white/[0.03] py-2.5 text-left text-sm font-medium text-rose-200 transition hover:border-rose-300/40 hover:bg-rose-500/10 ${
+              isCollapsed ? "px-0 text-center" : "px-3.5"
+            }`}
+            title="Sign Out"
+          >
+            {isCollapsed ? "Out" : "Sign Out"}
+          </button>
+        </div>
+      </aside>
+
+      {isMobileNavOpen ? (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button
+            type="button"
+            onClick={() => setIsMobileNavOpen(false)}
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            aria-label="Close navigation"
+          />
+
+          <div className="relative h-full w-[84%] max-w-sm border-r border-white/10 bg-slate-950/95 p-5 shadow-2xl backdrop-blur-2xl">
+            <div className="mb-5 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300/90">Detagenix</p>
+                <p className="mt-1 text-lg font-semibold text-white">Enterprise CRM</p>
+              </div>
               <button
                 type="button"
-                onClick={() => setIsProfileOpen((prev) => !prev)}
-                className="w-11 h-11 rounded-full bg-gradient-to-br from-cyan-500 to-emerald-500 text-white flex items-center justify-center font-bold shadow-lg hover:scale-105 transition"
-                title="Open profile menu"
+                onClick={() => setIsMobileNavOpen(false)}
+                className="rounded-lg border border-white/10 px-2.5 py-1.5 text-xs font-semibold text-slate-200"
               >
-                {initials}
+                Close
+              </button>
+            </div>
+
+            <ul className="space-y-1.5">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const isActive =
+                  location.pathname === item.path ||
+                  location.pathname.startsWith(`${item.path}/`);
+
+                return (
+                  <li key={`mobile-${item.name}`}>
+                    <Link to={item.path} className={navLinkClass(isActive)}>
+                      <span className="inline-flex items-center gap-3">
+                        <Icon size={16} />
+                        <span>{item.name}</span>
+                      </span>
+                      {isActive ? <span className="h-1.5 w-1.5 rounded-full bg-cyan-300" /> : null}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <div className="mt-6 space-y-2">
+              <button
+                type="button"
+                onClick={handleGoToProfile}
+                className="inline-flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-left text-sm font-medium text-slate-200"
+              >
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500 to-emerald-500 text-xs font-bold text-white">
+                  {initials}
+                </span>
+                Profile
               </button>
 
-              {isProfileOpen && (
-                <div className="absolute right-0 mt-3 w-44 rounded-2xl bg-slate-900/95 backdrop-blur-xl border border-slate-700/70 shadow-2xl py-2 z-50">
-                  <button
-                    type="button"
-                    onClick={handleGoToProfile}
-                    className="w-full text-left px-5 py-3 text-sm font-medium text-slate-200 hover:bg-slate-800 transition"
-                  >
-                    Profile
-                  </button>
-
-                  <div className="border-t border-slate-700 my-1"></div>
-
-                  <button
-                    onClick={handleLogout}
-                    className="w-full text-left px-5 py-3 text-sm font-medium text-rose-400 hover:bg-rose-500/10 transition"
-                  >
-                    Logout
-                  </button>
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="w-full rounded-xl border border-rose-300/25 bg-rose-500/10 px-3.5 py-2.5 text-left text-sm font-medium text-rose-200"
+              >
+                Sign Out
+              </button>
             </div>
           </div>
-
         </div>
-      </div>
-    </nav>
+      ) : null}
+    </>
   );
 }

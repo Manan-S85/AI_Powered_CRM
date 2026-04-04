@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
@@ -63,6 +64,10 @@ def execute(arguments: Dict[str, Any]) -> Dict[str, Any]:
 
     probability = arguments.get("probability")
     date_range = arguments.get("date_range")
+    name = str(arguments.get("name") or "").strip()
+    email = str(arguments.get("email") or "").strip()
+    unique_id = str(arguments.get("unique_id") or "").strip()
+    role_position = str(arguments.get("role_position") or "").strip()
     limit = min(int(arguments.get("limit", 20)), _MAX_LIMIT)
 
     query: Dict[str, Any] = {}
@@ -70,6 +75,18 @@ def execute(arguments: Dict[str, Any]) -> Dict[str, Any]:
         query.update(_build_probability_filter(probability))
     if date_range:
         query = {"$and": [query, _build_date_filter(date_range)]} if query else _build_date_filter(date_range)
+
+    if unique_id:
+        query["unique_id"] = unique_id
+
+    if email:
+        query["email"] = {"$regex": f"^{re.escape(email)}$", "$options": "i"}
+
+    if name:
+        query["name"] = {"$regex": re.escape(name), "$options": "i"}
+
+    if role_position:
+        query["role_position"] = {"$regex": re.escape(role_position), "$options": "i"}
 
     projection = {
         "name": 1,
@@ -96,6 +113,10 @@ def execute(arguments: Dict[str, Any]) -> Dict[str, Any]:
         "filters": {
             "probability": probability,
             "date_range": date_range,
+            "name": name or None,
+            "email": email or None,
+            "unique_id": unique_id or None,
+            "role_position": role_position or None,
             "limit": limit,
         },
         "leads": leads,

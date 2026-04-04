@@ -19,6 +19,31 @@ def format_success(tool: str, arguments: Dict[str, Any], result: Dict[str, Any])
         probability = _format_probability_label(arguments.get("probability"))
         date_range = arguments.get("date_range")
         range_label = f" from {date_range.replace('_', ' ')}" if date_range else ""
+        identity_filters = [
+            arguments.get("name"),
+            arguments.get("email"),
+            arguments.get("unique_id"),
+            arguments.get("role_position"),
+        ]
+        has_identity_filter = any(identity_filters)
+
+        if has_identity_filter and count == 0:
+            return "No matching lead found for the requested details."
+
+        if has_identity_filter and count > 0:
+            lead = (result.get("leads") or [{}])[0]
+            lead_name = lead.get("name", "Unknown")
+            lead_email = lead.get("email", "N/A")
+            lead_role = lead.get("role_position", "N/A")
+            lead_location = lead.get("location", "N/A")
+            prediction = lead.get("ml_prediction") or {}
+            temp = prediction.get("predicted_temperature", "Unknown")
+            confidence = float(prediction.get("confidence", 0.0)) * 100
+            return (
+                f"Top match: {lead_name} ({lead_email}), {lead_role}, {lead_location}. "
+                f"Lead score: {temp} ({confidence:.0f}% confidence)."
+            )
+
         return f"Found {count} {probability}leads{range_label}."
 
     if tool == "add_lead":
@@ -43,6 +68,9 @@ def format_success(tool: str, arguments: Dict[str, Any], result: Dict[str, Any])
         total_predictions = int(ml_stats.get("total_predictions", 0))
         return f"CRM stats ready: {total_leads} leads, {total_predictions} ML-scored records."
 
+    if tool == "general_assistant":
+        return str(result.get("answer", "I am here to help with your CRM questions."))
+
     return "Request completed successfully."
 
 
@@ -50,6 +78,7 @@ def format_success(tool: str, arguments: Dict[str, Any], result: Dict[str, Any])
 def format_error(code: str, message: str, detail: Dict[str, Any] | None = None) -> Dict[str, Any]:
     return {
         "success": False,
+        "message": message,
         "error": {
             "code": code,
             "message": message,

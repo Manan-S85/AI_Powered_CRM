@@ -7,12 +7,16 @@ from typing import Any, Dict, List
 TOOL_DEFINITIONS: List[Dict[str, Any]] = [
     {
         "name": "get_leads",
-        "description": "Fetch leads with optional probability and date range filters.",
+        "description": "Fetch leads with optional probability/date filters and direct lookup fields.",
         "parameters": {
             "type": "object",
             "properties": {
                 "probability": {"type": "string", "enum": ["high", "medium", "low"]},
                 "date_range": {"type": "string", "enum": ["last_7_days", "last_30_days"]},
+                "name": {"type": "string", "minLength": 1, "maxLength": 200},
+                "email": {"type": "string", "minLength": 3, "maxLength": 254},
+                "unique_id": {"type": "string", "minLength": 1, "maxLength": 100},
+                "role_position": {"type": "string", "minLength": 1, "maxLength": 200},
                 "limit": {"type": "integer", "minimum": 1, "maximum": 50},
             },
             "additionalProperties": False,
@@ -78,6 +82,15 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
     {
         "name": "get_stats",
         "description": "Get high-level CRM and ML stats summary.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "general_assistant",
+        "description": "Answer general questions about CRM features or broader informational queries.",
         "parameters": {
             "type": "object",
             "properties": {},

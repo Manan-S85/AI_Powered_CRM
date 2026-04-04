@@ -21,6 +21,8 @@ import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
+from pathlib import Path
+from dotenv import dotenv_values, load_dotenv
 
 router = APIRouter(prefix="/email", tags=["Email Generator"])
 
@@ -42,11 +44,120 @@ class EmailGenerateResponse(BaseModel):
 
 # ─── LLM Configuration (plug in key when provided) ───────────────────────────
 
+def _load_env_files() -> None:
+    """Load .env from common locations, including project root."""
+    service_dir = Path(__file__).resolve().parent
+    project_root = service_dir.parents[1]
+    env_candidates = [
+        project_root / ".env",
+        service_dir.parent / ".env",
+        service_dir / ".env",
+        Path.cwd() / ".env",
+    ]
+
+    for env_path in env_candidates:
+        if env_path.exists():
+            # Override so latest .env values are respected even if stale env vars exist.
+            load_dotenv(env_path, override=True)
+
+
+def _resolve_provider_and_key() -> tuple[str, str]:
+    """Resolve provider and key with support for provider-specific env vars."""
+    service_dir = Path(__file__).resolve().parent
+    project_root = service_dir.parents[1]
+    file_values = dotenv_values(project_root / ".env")
+
+    def _env_or_file(name: str) -> str:
+        env_val = os.getenv(name, "")
+        if env_val and env_val.strip():
+            return env_val.strip()
+        return str(file_values.get(name) or "").strip()
+
+    provider = _env_or_file("LLM_PROVIDER").lower()
+
+    generic_key = _env_or_file("LLM_API_KEY")
+    openai_key = _env_or_file("OPENAI_API_KEY")
+    groq_key = _env_or_file("GROQ_API_KEY")
+    anthropic_key = _env_or_file("ANTHROPIC_API_KEY")
+    gemini_key = _env_or_file("GEMINI_API_KEY") or _env_or_file("GOOGLE_API_KEY")
+
+    if not provider:
+        if gemini_key:
+            provider = "gemini"
+        elif openai_key or generic_key:
+            provider = "openai"
+        elif groq_key:
+            provider = "groq"
+        elif anthropic_key:
+            provider = "anthropic"
+        else:
+            provider = "openai"
+
+    provider_keys = {
+        "openai": openai_key,
+        "groq": groq_key,
+        "anthropic": anthropic_key,
+        "gemini": gemini_key,
+    }
+
+    if provider and not generic_key and not provider_keys.get(provider):
+        for fallback_provider in ["gemini", "openai", "groq", "anthropic"]:
+            if provider_keys.get(fallback_provider):
+                provider = fallback_provider
+                break
+
+    selected_key = generic_key or provider_keys.get(provider, "")
+    return provider, selected_key
+
+
+def _refresh_llm_settings() -> None:
+    """Refresh provider/key/model from environment before each generation call."""
+    global LLM_PROVIDER, LLM_API_KEY, LLM_MODEL
+    _load_env_files()
+    LLM_PROVIDER, LLM_API_KEY = _resolve_provider_and_key()
+    if LLM_PROVIDER == "gemini":
+        LLM_MODEL = os.getenv("GEMINI_MODEL", os.getenv("LLM_MODEL", LLM_DEFAULT_MODEL["gemini"]))
+    else:
+        LLM_MODEL = os.getenv("LLM_MODEL", LLM_DEFAULT_MODEL.get(LLM_PROVIDER, "gpt-4o-mini"))
+
+
+def _get_gemini_model_candidates() -> list[str]:
+    """Return prioritized Gemini models, preferring high-quota flash-lite variants."""
+    preferred = (os.getenv("GEMINI_MODEL", "") or "").strip()
+    candidates = [
+        preferred,
+        "gemini-3.1-flash-lite-preview",
+        "gemini-2.5-flash-lite",
+        "gemini-3.1-flash-preview",
+        "gemini-2.5-flash",
+    ]
+
+    # Preserve order while removing blanks/duplicates.
+    deduped = []
+    seen = set()
+    for model_name in candidates:
+        if not model_name or model_name in seen:
+            continue
+        seen.add(model_name)
+        deduped.append(model_name)
+    return deduped
+
+
+_load_env_files()
+
 # Supported providers: "openai" | "anthropic" | "groq" | "gemini"
-# Change LLM_PROVIDER and set the matching env variable when API key is given.
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
-LLM_API_KEY  = os.getenv("LLM_API_KEY", "")         # Set this when key is provided
-LLM_MODEL    = os.getenv("LLM_MODEL", "gpt-4o-mini") # Change model as needed
+# Provider auto-detection prefers Gemini when GEMINI_API_KEY/GOOGLE_API_KEY is present.
+LLM_PROVIDER, LLM_API_KEY = _resolve_provider_and_key()
+LLM_DEFAULT_MODEL = {
+    "openai": "gpt-4o-mini",
+    "groq": "llama3-8b-8192",
+    "anthropic": "claude-3-haiku-20240307",
+    "gemini": "gemini-3.1-flash-lite-preview",
+}
+if LLM_PROVIDER == "gemini":
+    LLM_MODEL = os.getenv("GEMINI_MODEL", os.getenv("LLM_MODEL", LLM_DEFAULT_MODEL["gemini"]))
+else:
+    LLM_MODEL = os.getenv("LLM_MODEL", LLM_DEFAULT_MODEL.get(LLM_PROVIDER, "gpt-4o-mini"))
 
 
 # ─── Internal: Fetch lead from existing ML service ───────────────────────────
@@ -131,13 +242,15 @@ async def _call_llm(prompt: str) -> str:
     Currently supports OpenAI-compatible APIs.
     Add more providers below when needed.
     """
+    _refresh_llm_settings()
+
     if not LLM_API_KEY:
         # Return a placeholder so the feature works without a key (for testing)
-        logging.warning("[EmailGen] LLM_API_KEY not set — returning placeholder email")
+        logging.warning("[EmailGen] No LLM API key configured (LLM_API_KEY/OPENAI_API_KEY/GEMINI_API_KEY/etc.)")
         return (
             "SUBJECT: Following up on our conversation\n"
             "BODY:\nHi [Lead Name],\n\n"
-            "This is a placeholder email. Please set LLM_API_KEY in your environment "
+            "This is a placeholder email. Please set a valid LLM key in your environment "
             "variables to enable AI-generated emails.\n\n"
             "Best regards,\nYour CRM"
         )
@@ -148,6 +261,8 @@ async def _call_llm(prompt: str) -> str:
         return await _call_groq(prompt)
     elif LLM_PROVIDER == "anthropic":
         return await _call_anthropic(prompt)
+    elif LLM_PROVIDER == "gemini":
+        return await _call_gemini(prompt)
     else:
         raise HTTPException(status_code=500, detail=f"Unsupported LLM_PROVIDER: {LLM_PROVIDER}")
 
@@ -219,6 +334,55 @@ async def _call_anthropic(prompt: str) -> str:
     return response.json()["content"][0]["text"].strip()
 
 
+async def _call_gemini(prompt: str) -> str:
+    """Google Gemini API (REST)."""
+    model_candidates = _get_gemini_model_candidates()
+    last_error = ""
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        for model_name in model_candidates:
+            endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
+            response = await client.post(
+                endpoint,
+                headers={
+                    "Content-Type": "application/json",
+                    "x-goog-api-key": LLM_API_KEY,
+                },
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {
+                        "temperature": 0.7,
+                        "maxOutputTokens": 600,
+                    },
+                },
+            )
+
+            if response.status_code == 200:
+                payload = response.json()
+                candidates = payload.get("candidates", [])
+                if not candidates:
+                    last_error = f"Gemini returned no candidates for {model_name}"
+                    continue
+
+                parts = candidates[0].get("content", {}).get("parts", [])
+                text = "".join(part.get("text", "") for part in parts).strip()
+                if not text:
+                    last_error = f"Gemini returned empty content for {model_name}"
+                    continue
+
+                return text
+
+            last_error = f"[{model_name}] {response.status_code}: {response.text}"
+            # Retry on quota/availability/model-not-found with next fallback model.
+            if response.status_code in {404, 429, 503}:
+                continue
+            logging.error(f"[EmailGen] Gemini error: {last_error}")
+            raise HTTPException(status_code=502, detail="Gemini API call failed")
+
+    logging.error(f"[EmailGen] Gemini error after fallbacks: {last_error}")
+    raise HTTPException(status_code=502, detail="Gemini API call failed")
+
+
 # ─── Internal: Parse LLM Output ──────────────────────────────────────────────
 
 def _parse_email_output(raw: str) -> tuple[str, str]:
@@ -277,9 +441,9 @@ async def generate_followup_email(request: EmailGenerateRequest):
 
     return EmailGenerateResponse(
         success=True,
-        lead_name=lead.get("name", ""),
-        lead_email=lead.get("email", ""),
-        subject=subject,
-        body=body,
-        lead_temperature=temperature,
+        lead_name=str(lead.get("name") or ""),
+        lead_email=str(lead.get("email") or ""),
+        subject=str(subject or "Follow-up"),
+        body=str(body or ""),
+        lead_temperature=str(temperature or "Unknown"),
     )

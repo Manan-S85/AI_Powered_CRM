@@ -42,14 +42,14 @@ class GeminiToolRouterClient:
         self.api_key = env_api_key or env_google_key or file_api_key or file_google_key
         configured_model = os.getenv("GEMINI_MODEL", "").strip()
         # Prefer high-throughput free-tier models when no explicit override is provided.
-        self.models = [configured_model] if configured_model else [
+        base_models = [
             "gemini-3.1-flash-lite-preview",
-            "gemini-3.1-flash-preview",
             "gemini-2.5-flash-lite",
-            "gemini-2.0-flash-lite",
-            "gemini-2.0-flash",
+            "gemini-3.1-flash-preview",
             "gemini-2.5-flash",
         ]
+        ordered_models = [configured_model, *base_models] if configured_model else base_models
+        self.models = [model for index, model in enumerate(ordered_models) if model and model not in ordered_models[:index]]
         self.timeout_seconds = int(os.getenv("GEMINI_TIMEOUT_SECONDS", "30"))
 
         if not self.api_key:
@@ -73,10 +73,12 @@ class GeminiToolRouterClient:
             f"{tool_json}\\n"
             "Rules:\\n"
             "- If user asks to list/filter leads, use get_leads.\\n"
+            "- If user asks details about a specific lead/person, use get_leads with name/email/unique_id and set limit to 5 or less.\n"
             "- If user asks to create/register a lead, use add_lead.\\n"
             "- If user asks to analyze transcript/chat/meeting notes, use analyze_conversation.\\n"
             "- If user asks for company/domain enrichment, use enrich_company.\\n"
             "- If user asks for summary metrics/stats/dashboard, use get_stats.\\n"
+            "- If user asks a general product question or outside knowledge question that does not require CRM data mutation/query, use general_assistant.\n"
             "- Never invent unsupported keys.\\n"
             "- For missing optional fields, omit them.\\n"
             "- arguments must always be an object.\\n\\n"
@@ -84,23 +86,29 @@ class GeminiToolRouterClient:
             f"user_input: {user_input}"
         )
 
-        payload = {
-            "contents": [
-                {
-                    "role": "user",
-                    "parts": [{"text": prompt}],
-                }
-            ],
-            "systemInstruction": {
-                "role": "system",
-                "parts": [{"text": system_instruction}],
-            },
-            "generationConfig": {
+        def _build_payload(include_schema: bool = True) -> Dict[str, Any]:
+            generation_config: Dict[str, Any] = {
                 "temperature": 0,
                 "responseMimeType": "application/json",
-                "responseSchema": GEMINI_TOOL_CALL_SCHEMA,
-            },
-        }
+            }
+            if include_schema:
+                generation_config["responseSchema"] = _sanitize_response_schema(GEMINI_TOOL_CALL_SCHEMA)
+
+            return {
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [{"text": prompt}],
+                    }
+                ],
+                "systemInstruction": {
+                    "role": "system",
+                    "parts": [{"text": system_instruction}],
+                },
+                "generationConfig": generation_config,
+            }
+
+        payload = _build_payload(include_schema=True)
 
         parsed = None
         last_error: Optional[str] = None
@@ -110,7 +118,10 @@ class GeminiToolRouterClient:
             try:
                 response = requests.post(
                     endpoint,
-                    params={"key": self.api_key},
+                    headers={
+                        "Content-Type": "application/json",
+                        "x-goog-api-key": self.api_key,
+                    },
                     json=payload,
                     timeout=self.timeout_seconds,
                 )
@@ -121,6 +132,34 @@ class GeminiToolRouterClient:
             if response.status_code < 400:
                 parsed = response.json()
                 break
+
+            # Some Gemini model variants reject strict JSON Schema keywords.
+            # Retry once without responseSchema and rely on server-side validation.
+            lower_error = response.text.lower()
+            if (
+                response.status_code == 400
+                and ("additionalproperties" in lower_error or "response_schema" in lower_error)
+            ):
+                fallback_payload = _build_payload(include_schema=False)
+                try:
+                    fallback_response = requests.post(
+                        endpoint,
+                        headers={
+                            "Content-Type": "application/json",
+                            "x-goog-api-key": self.api_key,
+                        },
+                        json=fallback_payload,
+                        timeout=self.timeout_seconds,
+                    )
+                except requests.RequestException as error:
+                    last_error = f"Gemini fallback request failed for {model}: {error}"
+                    continue
+
+                if fallback_response.status_code < 400:
+                    parsed = fallback_response.json()
+                    break
+
+                response = fallback_response
 
             last_error = f"Gemini API error for {model} ({response.status_code}): {response.text}"
 
@@ -144,6 +183,68 @@ class GeminiToolRouterClient:
 
         return tool_call
 
+    def answer_general_question(self, user_input: str, user_context: Optional[Dict[str, Any]] = None) -> str:
+        """Answer general CRM/site questions when no strict tool payload is suitable."""
+        context_json = json.dumps(user_context or {}, ensure_ascii=True)
+        system_instruction = (
+            "You are the AI assistant for an AI-powered CRM web application. "
+            "Be concise, practical, and accurate. "
+            "If user asks about app capabilities, explain what is available in this CRM: "
+            "lead dashboard, candidate profile, ML lead scoring (hot/warm/cold), smart follow-up email generation, "
+            "company enrichment, AI insights from conversations, and chatbot actions for leads/stats. "
+            "If the user asks for unsupported features, clearly say what is currently supported and suggest closest actions. "
+            "Never claim you fetched records, updated data, or executed tools unless explicitly provided in prompt context."
+        )
+        prompt = (
+            f"user_context: {context_json}\n"
+            f"user_input: {user_input}\n\n"
+            "Respond in plain text only."
+        )
+
+        payload = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [{"text": prompt}],
+                }
+            ],
+            "systemInstruction": {
+                "role": "system",
+                "parts": [{"text": system_instruction}],
+            },
+            "generationConfig": {
+                "temperature": 0.3,
+            },
+        }
+
+        last_error: Optional[str] = None
+        for model in self.models:
+            endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+            try:
+                response = requests.post(
+                    endpoint,
+                    headers={
+                        "Content-Type": "application/json",
+                        "x-goog-api-key": self.api_key,
+                    },
+                    json=payload,
+                    timeout=self.timeout_seconds,
+                )
+            except requests.RequestException as error:
+                last_error = f"Gemini request failed for {model}: {error}"
+                continue
+
+            if response.status_code < 400:
+                parsed = response.json()
+                text = self._extract_text(parsed)
+                return text
+
+            last_error = f"Gemini API error for {model} ({response.status_code}): {response.text}"
+            if response.status_code not in {404, 429, 503}:
+                raise GeminiClientError(last_error)
+
+        raise GeminiClientError(last_error or "Gemini API call failed")
+
     @staticmethod
     def _extract_text(payload: Dict[str, Any]) -> str:
         candidates = payload.get("candidates") or []
@@ -159,3 +260,19 @@ class GeminiToolRouterClient:
                 return text.strip()
 
         raise GeminiClientError("Gemini returned empty response content")
+
+
+def _sanitize_response_schema(value: Any) -> Any:
+    """Drop schema keywords unsupported by some Gemini responseSchema validators."""
+    if isinstance(value, dict):
+        cleaned: Dict[str, Any] = {}
+        for key, nested in value.items():
+            if key == "additionalProperties":
+                continue
+            cleaned[key] = _sanitize_response_schema(nested)
+        return cleaned
+
+    if isinstance(value, list):
+        return [_sanitize_response_schema(item) for item in value]
+
+    return value

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../api/Api";
+import SmartEmailGeneratorModal from "../components/SmartEmailGeneratorModal";
 
 export default function LeadDetail() {
   const { id } = useParams();
@@ -9,6 +10,7 @@ export default function LeadDetail() {
   const [lead, setLead] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
 
   useEffect(() => {
     fetchLead();
@@ -17,7 +19,7 @@ export default function LeadDetail() {
   const fetchLead = async () => {
     try {
       setLoading(true);
-      const res = await api.get(`/leads/${id}`);
+      const res = await api.get(`/lead/${id}`);
       setLead(res.data?.lead);
       setError("");
     } catch (err) {
@@ -83,6 +85,16 @@ export default function LeadDetail() {
           </div>
 
           <div className="flex flex-col items-start md:items-end gap-4">
+            <button
+              type="button"
+              onClick={() => setIsEmailModalOpen(true)}
+              disabled={!lead?.unique_id}
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-semibold transition disabled:opacity-60"
+              title={lead?.unique_id ? "Generate contextual follow-up email" : "Lead unique_id missing"}
+            >
+              Generate Follow-up
+            </button>
+
             <span
               className={`px-6 py-2 rounded-full font-semibold text-sm ${temperatureColor(
                 lead?.ml_prediction?.predicted_temperature
@@ -152,6 +164,13 @@ export default function LeadDetail() {
       </div>
 
     </div>
+
+    <SmartEmailGeneratorModal
+      isOpen={isEmailModalOpen}
+      onClose={() => setIsEmailModalOpen(false)}
+      uniqueId={lead?.unique_id}
+      leadName={lead?.name}
+    />
   </div>
 );
 }

@@ -29,6 +29,33 @@ const saveContext = (context) => {
   }
 };
 
+const buildAssistantMessage = (payload) => {
+  if (!payload || typeof payload !== "object") {
+    return "The chatbot returned an invalid response.";
+  }
+
+  if (payload.success === false) {
+    return payload?.error?.message || payload?.message || "Chatbot request failed.";
+  }
+
+  if (typeof payload.message === "string" && payload.message.trim()) {
+    return payload.message;
+  }
+
+  const tool = payload.tool;
+  const data = payload.data;
+  if (tool === "get_leads" && data && typeof data === "object") {
+    const count = Number(data.count || 0);
+    return `Found ${count} lead${count === 1 ? "" : "s"}.`;
+  }
+
+  if (tool === "get_stats") {
+    return "CRM statistics fetched successfully.";
+  }
+
+  return "Request completed successfully.";
+};
+
 export default function Chatbot() {
   const [messages, setMessages] = useState([
     {
@@ -57,17 +84,21 @@ export default function Chatbot() {
       const { data } = await api.post("/chatbot/chat", {
         user_input: trimmed,
         user_context: userContext,
+      }, {
+        timeout: 60000,
       });
 
       const nextContext = data?.data?.conversation_memory || userContext;
       setUserContext(nextContext);
       saveContext(nextContext);
 
+      const assistantText = buildAssistantMessage(data);
+
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          text: data?.message || "Request completed.",
+          text: assistantText,
           meta: data,
         },
       ]);

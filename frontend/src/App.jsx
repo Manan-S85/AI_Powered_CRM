@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import EditLead from "./pages/EditLead";
@@ -7,17 +8,31 @@ import MLStatsSample from "./pages/MlStateSample";
 import AIInsights from "./pages/AIInsights";
 import CandidateProfile from "./pages/CandidateProfile";
 import Chatbot from "./pages/Chatbot";
+import FollowupOptimizer from "./pages/FollowupOptimizer";
+import SalesForecasting from "./pages/SalesForecasting";
+import ClientLtvPrediction from "./pages/ClientLtvPrediction";
 import Navbar from "./components/Navbar";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Profile from "./pages/Profile";
 
 function AppLayout() {
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
   return (
-    <>
-      <Navbar />
-      <Outlet />
-    </>
+    <div className="min-h-screen">
+      <Navbar
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
+      />
+      <main
+        className={`pb-8 pt-16 transition-all duration-300 lg:pt-6 ${
+          isSidebarCollapsed ? "lg:ml-24" : "lg:ml-72"
+        }`}
+      >
+        <Outlet />
+      </main>
+    </div>
   );
 }
 
@@ -37,6 +52,9 @@ function App() {
           <Route path="/addleads" element={<AddLead />} />
           <Route path="/mlstats" element={<MLStatsSample />} />
           <Route path="/ai-insights" element={<AIInsights />} />
+          <Route path="/sales-forecasting" element={<SalesForecasting />} />
+          <Route path="/client-ltv" element={<ClientLtvPrediction />} />
+          <Route path="/followup-optimizer" element={<FollowupOptimizer />} />
           <Route path="/chatbot" element={<Chatbot />} />
           <Route path="/profile" element={<Profile />} />
         </Route>
