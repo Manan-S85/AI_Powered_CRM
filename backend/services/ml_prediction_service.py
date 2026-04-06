@@ -1,5 +1,6 @@
 import os
 import uuid
+import threading
 import joblib
 import pandas as pd
 import numpy as np
@@ -9,6 +10,7 @@ from dotenv import load_dotenv
 import logging
 from typing import Dict, List, Optional
 import json
+from prediction_enhancer import PredictionEnhancer
 
 # Load environment variables
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
@@ -25,6 +27,7 @@ class LeadScoringService:
         self.temperature_model = None
         self.model_metadata = None
         self.feature_mapper = None
+        self.prediction_enhancer = None
         
         self._initialize_components()
     
@@ -84,6 +87,19 @@ class LeadScoringService:
                 with open(metadata_path, 'r') as f:
                     self.model_metadata = json.load(f)
                 logging.info(f"✅ Model accuracy: {self.model_metadata['performance']['accuracy']:.1%}")
+
+                # Initialize non-breaking enhancement layer.
+                try:
+                    model_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'ml_model'))
+                    self.prediction_enhancer = PredictionEnhancer(
+                        model=self.temperature_model,
+                        model_metadata=self.model_metadata,
+                        model_root=model_root,
+                    )
+                    logging.info("✅ Prediction enhancement layer initialized")
+                except Exception as enhancer_error:
+                    self.prediction_enhancer = None
+                    logging.warning(f"[WARN] Prediction enhancement layer disabled: {enhancer_error}")
             
         except Exception as e:
             logging.error(f"❌ Error initializing components: {e}")
@@ -324,23 +340,144 @@ class LeadScoringService:
             prediction = self.temperature_model.predict(df)[0]
             probabilities = self.temperature_model.predict_proba(df)[0]
             
-            # Get probability for each class
-            classes = ['Cold', 'Hot', 'Warm']  # Alphabetical order
-            prob_dict = {classes[i]: float(probabilities[i]) for i in range(len(classes))}
-            
-            confidence = max(probabilities)
-            
+            # Keep class mapping tied to the actual trained model output order.
+            model_classes = [str(item) for item in getattr(self.temperature_model, 'classes_', [])]
+            if len(model_classes) != len(probabilities):
+                model_classes = ['Cold', 'Hot', 'Warm']
+
+            prob_dict = {model_classes[i]: float(probabilities[i]) for i in range(len(probabilities))}
+            raw_confidence = float(max(probabilities)) if len(probabilities) > 0 else 0.0
+            base_prediction = str(prediction)
+
+            enhanced = None
+            if self.prediction_enhancer is not None:
+                try:
+                    enhanced = self.prediction_enhancer.refine_prediction(
+                        record=record,
+                        feature_values=feature_values,
+                        base_prediction=base_prediction,
+                        raw_probabilities=prob_dict,
+                    )
+                except Exception as enhancer_error:
+                    logging.warning(f"[WARN] Prediction enhancement failed; using base output: {enhancer_error}")
+
+            if enhanced is None:
+                confidence = raw_confidence
+                final_label = base_prediction
+                final_probabilities = prob_dict
+                confidence_level = 'High' if confidence >= 0.82 else ('Medium' if confidence >= 0.65 else 'Low')
+                confidence_threshold = float(os.getenv('LEAD_CONFIDENCE_THRESHOLD', '0.70'))
+                label_reason = 'Base model output used'
+                calibration_applied = False
+                calibrated_probabilities = prob_dict
+                is_uncertain = bool(confidence < confidence_threshold)
+                uncertainty = {
+                    'is_uncertain': is_uncertain,
+                    'summary': (
+                        f'Uncertainty flag raised for {final_label} classification'
+                        if is_uncertain
+                        else f'Confidence is stable for {final_label} classification'
+                    ),
+                    'reasons': (
+                        [
+                            (
+                                f'Model confidence is below the accepted production threshold '
+                                f'({confidence:.1%} vs {confidence_threshold:.0%}).'
+                            ),
+                            'Fallback path used without calibration metadata from enhancement layer.',
+                        ]
+                        if is_uncertain
+                        else []
+                    ),
+                    'recommended_action': (
+                        'Collect additional lead context before prioritization.'
+                        if is_uncertain
+                        else 'No additional clarification required.'
+                    ),
+                    'confidence_threshold': confidence_threshold,
+                    'top_label': final_label,
+                    'top_score': confidence,
+                }
+                rule_engine = {
+                    'enabled': False,
+                    'business_signal': 0.0,
+                    'applied_rules': [],
+                }
+            else:
+                confidence = float(enhanced.get('confidence', raw_confidence))
+                final_label = str(enhanced.get('final_label', base_prediction))
+                final_probabilities = enhanced.get('probabilities', prob_dict)
+                confidence_level = str(enhanced.get('confidence_level', 'Low'))
+                confidence_threshold = float(enhanced.get('confidence_threshold', 0.70))
+                label_reason = str(enhanced.get('label_reason', 'Enhanced prediction output'))
+                calibration_applied = bool(enhanced.get('calibration_applied', False))
+                calibrated_probabilities = enhanced.get('calibrated_probabilities', prob_dict)
+                is_uncertain = bool(enhanced.get('is_uncertain', False))
+                uncertainty = enhanced.get('uncertainty', {
+                    'is_uncertain': is_uncertain,
+                    'summary': str(enhanced.get('uncertainty_reason', label_reason)),
+                    'reasons': [],
+                    'recommended_action': 'Collect additional lead context before prioritization.' if is_uncertain else 'No additional clarification required.',
+                    'confidence_threshold': confidence_threshold,
+                    'top_label': final_label,
+                    'top_score': confidence,
+                })
+                rule_engine = enhanced.get('rule_engine', {
+                    'enabled': False,
+                    'business_signal': 0.0,
+                    'applied_rules': [],
+                })
+
             return {
-                'predicted_temperature': prediction,
-                'confidence': float(confidence),
-                'probabilities': prob_dict,
+                # Backward-compatible keys
+                'predicted_temperature': final_label,
+                'confidence': confidence,
+                'probabilities': final_probabilities,
                 'model_version': self.model_metadata.get('training_date', 'unknown'),
-                'prediction_timestamp': datetime.now().isoformat()
+                'prediction_timestamp': datetime.now().isoformat(),
+
+                # Enhanced, interpretable output
+                'final_label': final_label,
+                'confidence_level': confidence_level,
+                'confidence_threshold': confidence_threshold,
+                'label_reason': label_reason,
+                'base_model_temperature': base_prediction,
+                'raw_confidence': raw_confidence,
+                'raw_probabilities': prob_dict,
+                'calibration_applied': calibration_applied,
+                'calibrated_probabilities': calibrated_probabilities,
+                'rule_engine': rule_engine,
+                'is_uncertain': is_uncertain,
+                'uncertainty_reason': str(uncertainty.get('summary', label_reason)),
+                'uncertainty': uncertainty,
             }
             
         except Exception as e:
             logging.error(f"Error predicting temperature: {e}")
             return {'error': str(e)}
+
+    def _schedule_uncertain_prediction_fallback(self, unique_id: str, lead_record: Dict, ml_prediction: Dict) -> None:
+        """Run optional low-confidence fallback evaluation asynchronously."""
+        if self.prediction_enhancer is None:
+            return
+
+        if not self.prediction_enhancer.should_schedule_fallback(ml_prediction):
+            return
+
+        def _worker() -> None:
+            try:
+                fallback_result = self.prediction_enhancer.run_fallback_evaluation(lead_record, ml_prediction)
+
+                if self.collection is not None:
+                    self.collection.update_one(
+                        {'unique_id': unique_id},
+                        {'$set': {'ml_prediction.llm_fallback': fallback_result}}
+                    )
+            except Exception as worker_error:
+                logging.warning(f"[WARN] Async low-confidence fallback failed: {worker_error}")
+
+        thread = threading.Thread(target=_worker, daemon=True)
+        thread.start()
     
     def process_lead_with_ml(self, record: Dict) -> Dict:
         """Process a lead record with ML predictions and unique ID."""
@@ -359,6 +496,12 @@ class LeadScoringService:
                 'processed_at': datetime.now(),
                 'ml_enabled': True
             })
+
+            if self.prediction_enhancer is not None and self.prediction_enhancer.should_schedule_fallback(ml_prediction):
+                enhanced_record['ml_prediction']['llm_fallback'] = {
+                    'status': 'scheduled',
+                    'scheduled_at': datetime.now().isoformat(),
+                }
             
             # Save to MongoDB if collection is available
             if self.collection is not None:
@@ -380,6 +523,9 @@ class LeadScoringService:
                 except Exception as db_error:
                     logging.warning(f"⚠️ Could not save to MongoDB: {db_error}")
                     # Continue anyway - we still have the prediction result
+
+            # Non-blocking optional reassessment for low-confidence predictions.
+            self._schedule_uncertain_prediction_fallback(unique_id, record, ml_prediction)
             
             return enhanced_record
             
@@ -485,6 +631,56 @@ class LeadScoringService:
             logging.error(f"Error getting stats: {e}")
             return {}
 
+    def _normalize_prediction_for_response(self, prediction: Dict) -> Dict:
+        """Return API-safe prediction with deterministic Hot/Warm/Cold classification."""
+        if not isinstance(prediction, dict):
+            return prediction
+
+        current_label = str(prediction.get('predicted_temperature') or '').strip()
+        if current_label != 'Uncertain':
+            return prediction
+
+        fallback_label = (
+            prediction.get('base_model_temperature')
+            or (prediction.get('uncertainty') or {}).get('top_label')
+            or prediction.get('final_label')
+            or 'Cold'
+        )
+
+        normalized = dict(prediction)
+        normalized['predicted_temperature'] = fallback_label
+        normalized['final_label'] = fallback_label
+        normalized['is_uncertain'] = True
+
+        uncertainty = normalized.get('uncertainty')
+        if not isinstance(uncertainty, dict):
+            uncertainty = {}
+
+        summary = str(
+            uncertainty.get('summary')
+            or normalized.get('uncertainty_reason')
+            or f'Uncertainty flag raised for {fallback_label} classification'
+        )
+
+        normalized['uncertainty_reason'] = summary
+        normalized['uncertainty'] = {
+            **uncertainty,
+            'is_uncertain': True,
+            'top_label': uncertainty.get('top_label') or fallback_label,
+            'summary': summary,
+        }
+
+        return normalized
+
+    def _normalize_lead_for_response(self, lead: Dict) -> Dict:
+        """Normalize lead payload before returning it through APIs."""
+        if not isinstance(lead, dict):
+            return lead
+
+        normalized = dict(lead)
+        normalized['ml_prediction'] = self._normalize_prediction_for_response(normalized.get('ml_prediction'))
+        return normalized
+
     def get_all_leads_with_predictions(self, limit: int = 50) -> List[Dict]:
         """Get all leads with their ML predictions from MongoDB."""
         try:
@@ -497,6 +693,7 @@ class LeadScoringService:
             
             cursor = self.collection.find({}).limit(limit).sort("_id", -1)
             leads = list(cursor)
+            leads = [self._normalize_lead_for_response(lead) for lead in leads]
             logging.info(f"[OK] Fetched {len(leads)} leads from MongoDB")
             
             return leads
@@ -517,7 +714,7 @@ class LeadScoringService:
                 return None
             
             lead = self.collection.find_one({"unique_id": unique_id})
-            return lead
+            return self._normalize_lead_for_response(lead) if lead else None
             
         except Exception as e:
             logging.error(f"Error getting lead {unique_id}: {e}")
@@ -528,12 +725,15 @@ class LeadScoringService:
         try:
             if self.collection is None:
                 return []
-            
-            query = {"ml_prediction.predicted_temperature": temperature}
-            cursor = self.collection.find(query).limit(limit)
-            leads = list(cursor)
-            
-            return leads
+
+            # Include legacy records that were stored as 'Uncertain' and normalize before filtering.
+            cursor = self.collection.find({'ml_prediction': {'$exists': True}}).limit(max(limit * 5, 100))
+            leads = [self._normalize_lead_for_response(lead) for lead in list(cursor)]
+            filtered = [
+                lead for lead in leads
+                if str((lead.get('ml_prediction') or {}).get('predicted_temperature')) == temperature
+            ]
+            return filtered[:limit]
             
         except Exception as e:
             logging.error(f"Error getting leads by temperature {temperature}: {e}")

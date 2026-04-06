@@ -22,7 +22,7 @@ export default function LeadDetail() {
       const res = await api.get(`/lead/${id}`);
       setLead(res.data?.lead);
       setError("");
-    } catch (err) {
+    } catch {
       setError("Failed to load lead details");
     } finally {
       setLoading(false);

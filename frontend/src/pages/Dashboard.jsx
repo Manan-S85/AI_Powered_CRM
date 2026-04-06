@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Briefcase, Eye, RefreshCw, TrendingUp, Users } from "lucide-react";
+import { AlertTriangle, Briefcase, Eye, RefreshCw, TrendingUp, Users, X } from "lucide-react";
 import api from "../api/Api";
 
 const mockLeads = [
@@ -36,6 +36,17 @@ const mockLeads = [
   },
 ];
 
+const emptyConversationOverview = {
+  total_analyzed: 0,
+  average_client_intent_score: 0,
+  average_rep_performance_score: 0,
+  risk_distribution: {
+    "Deal at Risk": 0,
+    "Moderate Risk": 0,
+    "Healthy Deal": 0,
+  },
+};
+
 const canonicalize = (key) =>
   String(key || "")
     .toLowerCase()
@@ -63,6 +74,27 @@ const normalizeLead = (lead) => {
 
   return {
     ...lead,
+    ml_prediction: (() => {
+      const prediction = lead?.ml_prediction || { predicted_temperature: "Cold", confidence: 0 };
+      const currentLabel = String(prediction?.predicted_temperature || "").trim();
+      if (currentLabel !== "Uncertain") {
+        return prediction;
+      }
+
+      // Backward compatibility for records stored before uncertainty was moved to metadata.
+      const fallbackLabel =
+        prediction?.base_model_temperature ||
+        prediction?.uncertainty?.top_label ||
+        prediction?.final_label ||
+        "Cold";
+
+      return {
+        ...prediction,
+        predicted_temperature: fallbackLabel,
+        final_label: fallbackLabel,
+        is_uncertain: true,
+      };
+    })(),
     name: getValue("name", "full_name", "full name", "candidate name") || fullName || "N/A",
     email: getValue("email", "email address") || "N/A",
     role_position:
@@ -70,7 +102,6 @@ const normalizeLead = (lead) => {
     years_of_experience: getValue("years_of_experience", "years of experience", "experience", "exp") ?? 0,
     location: getValue("location", "current_location", "current location", "city") || "N/A",
     expected_salary: getValue("expected_salary", "expected salary", "salary", "annual salary") ?? 0,
-    ml_prediction: lead?.ml_prediction || { predicted_temperature: "Cold", confidence: 0 },
   };
 };
 
@@ -78,6 +109,8 @@ export default function Dashboard() {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [conversationOverview, setConversationOverview] = useState(emptyConversationOverview);
+  const [activeUncertainty, setActiveUncertainty] = useState(null);
 
   const navigate = useNavigate();
 
@@ -93,6 +126,22 @@ export default function Dashboard() {
       } else {
         setError("Unexpected response format from server. Showing sample dashboard data.");
         setLeads(mockLeads);
+      }
+
+      try {
+        const overviewRes = await api.get("/conversation-intelligence/overview?limit=300");
+        if (overviewRes?.data?.success && overviewRes?.data?.overview) {
+          setConversationOverview({
+            ...emptyConversationOverview,
+            ...overviewRes.data.overview,
+            risk_distribution: {
+              ...emptyConversationOverview.risk_distribution,
+              ...(overviewRes.data.overview.risk_distribution || {}),
+            },
+          });
+        }
+      } catch {
+        // Conversation intelligence is optional; keep default metrics when unavailable.
       }
     } catch (err) {
       setError(err.message || "Failed to load leads. Showing sample dashboard data.");
@@ -121,6 +170,41 @@ export default function Dashboard() {
     }).format(value);
   };
 
+  const riskLabelStyle = (label) => {
+    if (label === "Deal at Risk") return "bg-red-500/20 text-red-300 border border-red-500/40";
+    if (label === "Moderate Risk") return "bg-amber-500/20 text-amber-300 border border-amber-500/40";
+    return "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40";
+  };
+
+  const getUncertaintyData = (lead) => {
+    const prediction = lead?.ml_prediction || {};
+    const uncertainty =
+      prediction?.uncertainty && typeof prediction.uncertainty === "object"
+        ? prediction.uncertainty
+        : {};
+
+    const reasons = Array.isArray(uncertainty.reasons)
+      ? uncertainty.reasons.filter((item) => String(item || "").trim())
+      : [];
+
+    const isUncertain = Boolean(
+      prediction?.is_uncertain ?? uncertainty?.is_uncertain ?? false
+    );
+
+    return {
+      isUncertain,
+      classifiedAs: prediction?.predicted_temperature || "Cold",
+      summary:
+        uncertainty?.summary ||
+        prediction?.uncertainty_reason ||
+        "Uncertainty flag raised for this classification.",
+      reasons,
+      recommendedAction:
+        uncertainty?.recommended_action ||
+        "Collect additional lead context before taking high-priority actions.",
+    };
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-950">
@@ -138,7 +222,7 @@ export default function Dashboard() {
         <div className="flex justify-between items-center mb-12">
           <div>
             <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
-              Detagenix CRM Dashboard
+              Dashboard
             </h1>
             <p className="text-slate-300 mt-3 text-lg">Intelligent candidate scoring and analytics</p>
           </div>
@@ -202,6 +286,37 @@ export default function Dashboard() {
           </div>
         </div>
 
+        <div className="mb-12 rounded-3xl border border-white/10 bg-white/5 backdrop-blur-2xl p-6 md:p-8 shadow-2xl">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight text-white">Conversation Intelligence</h2>
+              <p className="text-sm text-slate-400 mt-1">Sentiment and intent scoring from conversations, emails, and transcripts.</p>
+            </div>
+            <span className="text-xs px-3 py-1.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+              Analyzed: {conversationOverview.total_analyzed}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="rounded-xl border border-white/10 bg-slate-950/50 p-4">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Client Intent Score</p>
+              <p className="text-2xl font-bold text-emerald-300 mt-2">{Math.round(conversationOverview.average_client_intent_score || 0)}</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-slate-950/50 p-4">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Sales Rep Performance</p>
+              <p className="text-2xl font-bold text-cyan-300 mt-2">{Math.round(conversationOverview.average_rep_performance_score || 0)}</p>
+            </div>
+            {Object.entries(conversationOverview.risk_distribution || {}).map(([label, count]) => (
+              <div key={label} className="rounded-xl border border-white/10 bg-slate-950/50 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-400 mb-2">{label}</p>
+                <span className={`inline-flex px-3 py-1.5 rounded-full text-sm font-semibold ${riskLabelStyle(label)}`}>
+                  {count}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div className="bg-white/5 backdrop-blur-2xl rounded-3xl border border-white/10 shadow-2xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -219,11 +334,14 @@ export default function Dashboard() {
               </thead>
 
               <tbody>
-                {leads.map((lead) => (
-                  <tr
-                    key={lead._id}
-                    className="border-t border-white/5 hover:bg-white/10 transition-all duration-300"
-                  >
+                {leads.map((lead) => {
+                  const uncertainty = getUncertaintyData(lead);
+
+                  return (
+                    <tr
+                      key={lead._id}
+                      className="border-t border-white/5 hover:bg-white/10 transition-all duration-300"
+                    >
                     <td className="p-5">
                       <p className="font-semibold text-lg">{lead.name}</p>
                       <p className="text-sm text-slate-400 mt-1">{lead.email}</p>
@@ -245,6 +363,28 @@ export default function Dashboard() {
                       >
                         {lead.ml_prediction?.predicted_temperature || "Cold"}
                       </span>
+                      {uncertainty.isUncertain ? (
+                        <div className="mt-2 inline-flex items-center gap-2 text-amber-300">
+                          <span
+                            className="inline-flex items-center"
+                            title={`Uncertain confidence: still classified as ${uncertainty.classifiedAs}`}
+                          >
+                            <AlertTriangle size={14} />
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setActiveUncertainty({
+                                leadName: lead.name,
+                                ...uncertainty,
+                              })
+                            }
+                            className="text-xs underline underline-offset-2 hover:text-amber-200"
+                          >
+                            Uncertain
+                          </button>
+                        </div>
+                      ) : null}
                     </td>
 
                     <td className="p-5 font-bold text-emerald-400">
@@ -262,12 +402,60 @@ export default function Dashboard() {
                         View
                       </button>
                     </td>
-                  </tr>
-                ))}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
+
+        {activeUncertainty ? (
+          <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="w-full max-w-2xl rounded-2xl border border-amber-400/30 bg-slate-900 shadow-2xl">
+              <div className="flex items-start justify-between p-5 border-b border-white/10">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-amber-300">Uncertainty Explanation</p>
+                  <h3 className="text-lg font-semibold mt-1 text-white">
+                    {activeUncertainty.leadName} classified as {activeUncertainty.classifiedAs}
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveUncertainty(null)}
+                  className="p-1.5 rounded-lg text-slate-300 hover:bg-white/10"
+                  title="Close"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4 text-sm text-slate-200">
+                <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-3">
+                  <p>{activeUncertainty.summary}</p>
+                </div>
+
+                {activeUncertainty.reasons.length ? (
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-400 mb-2">Why flagged as uncertain</p>
+                    <ul className="list-disc pl-5 space-y-1">
+                      {activeUncertainty.reasons.map((reason, index) => (
+                        <li key={`${reason}-${index}`}>{reason}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : (
+                  <p className="text-slate-400">No additional uncertainty factors were recorded.</p>
+                )}
+
+                <div className="rounded-xl border border-cyan-400/30 bg-cyan-500/10 p-3">
+                  <p className="text-xs uppercase tracking-wide text-cyan-300 mb-1">Recommended action</p>
+                  <p>{activeUncertainty.recommendedAction}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

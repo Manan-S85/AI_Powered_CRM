@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { createElement, useEffect, useState } from "react";
 import { Activity, CalendarClock, Coins, Loader2, Sparkles, TrendingUp } from "lucide-react";
 import { fetchClvCustomerOptions, predictClientLtv } from "../services/clientLtvService";
 
@@ -319,11 +319,11 @@ function SelectField({ label, name, value, onChange, options }) {
   );
 }
 
-function ResultCard({ icon: Icon, label, value, tone }) {
+function ResultCard({ icon, label, value, tone }) {
   return (
     <div className="rounded-xl border border-white/10 bg-slate-900/50 p-4">
       <p className="text-xs uppercase tracking-wide text-slate-400 inline-flex items-center gap-2">
-        <Icon size={14} />
+        {icon ? createElement(icon, { size: 14 }) : null}
         {label}
       </p>
       <p className={`mt-2 text-lg font-semibold ${tone}`}>{value}</p>

@@ -6,12 +6,13 @@ This provides REST API endpoints for the frontend to access ML predictions.
 from fastapi import FastAPI, HTTPException, Query, BackgroundTasks, Request, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, EmailStr, ValidationError
+from pydantic import BaseModel, EmailStr, ValidationError, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from bson import ObjectId
 import logging
 import os
+import sys
 from email_generator import router as email_router
 from followup_service import router as followup_router
 from client_ltv import router as clv_router
@@ -108,6 +109,8 @@ class AIInsightsGenerateResponse(BaseModel):
     insights: Dict[str, Any]
     record_id: Optional[str] = None
     stored: bool
+    conversation_intelligence_stored: bool = False
+    conversation_intelligence_record_id: Optional[str] = None
 
 
 class CompanyEnrichmentRequest(BaseModel):
@@ -127,8 +130,29 @@ class ChatbotChatRequest(BaseModel):
     user_input: str
     user_context: Optional[Dict[str, Any]] = None
 
+
+class ConversationMessage(BaseModel):
+    speaker: Optional[str] = None
+    role: Optional[str] = None
+    sender: Optional[str] = None
+    text: Optional[str] = None
+    content: Optional[str] = None
+    message: Optional[str] = None
+    body: Optional[str] = None
+
+
+class ConversationIntelligenceRequest(BaseModel):
+    source_type: str = "chat_message"
+    lead_id: Optional[str] = None
+    conversation_id: Optional[str] = None
+    conversation_text: Optional[str] = None
+    messages: List[ConversationMessage] = Field(default_factory=list)
+    metadata: Optional[Dict[str, Any]] = None
+    persist: bool = True
+
 _cached_auth_service = None
 _lead_enrichment_modules = None
+_conversation_intelligence_service = None
 
 # API Routes
 @app.get("/", summary="Health Check")
@@ -221,6 +245,8 @@ def _load_module_from_path(module_name: str, file_path: Path):
         raise ImportError(f"Unable to build import spec for {file_path}")
 
     module = importlib.util.module_from_spec(spec)
+    # Register before execution so decorators relying on sys.modules work correctly.
+    sys.modules[module_name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -272,6 +298,29 @@ def get_ai_insights_service():
         raise ImportError("Fallback AI insights module does not expose get_ai_insights_service")
 
     return resolver()
+
+
+def get_conversation_intelligence_service():
+    """Lazy import Conversation Intelligence service from folder with spaces."""
+    global _conversation_intelligence_service
+
+    if _conversation_intelligence_service is not None:
+        return _conversation_intelligence_service
+
+    service_dir = Path(__file__).resolve().parent
+    service_path = service_dir / "conversation intelligence engine" / "conversation_intelligence_service.py"
+
+    if not service_path.exists():
+        raise ImportError(f"Conversation intelligence service file not found at {service_path}")
+
+    module = _load_module_from_path("conversation_intelligence_service_module", service_path)
+    resolver = getattr(module, "get_conversation_intelligence_service", None)
+
+    if resolver is None:
+        raise ImportError("Conversation intelligence module does not expose get_conversation_intelligence_service")
+
+    _conversation_intelligence_service = resolver()
+    return _conversation_intelligence_service
 
 @app.post("/predict", response_model=Dict[str, Any], summary="Predict Lead Temperature")
 async def predict_lead_temperature(payload: Dict[str, Any]):
@@ -515,17 +564,92 @@ async def generate_ai_insights(
             file_bytes=file_bytes,
         )
 
+        conversation_intelligence_stored = False
+        conversation_intelligence_record_id = None
+
+        # Optionally chain AI Insights input into Conversation Intelligence so dashboard metrics populate.
+        auto_chain_enabled = os.getenv("CONV_INTELLIGENCE_AUTO_FROM_AI_INSIGHTS", "true").lower() == "true"
+        resolved_text = str(result.get("resolved_text") or "").strip()
+
+        if auto_chain_enabled and resolved_text:
+            try:
+                ci_service = get_conversation_intelligence_service()
+                ci_result = await ci_service.analyze_conversation(
+                    {
+                        "source_type": source_type,
+                        "conversation_text": resolved_text,
+                        "metadata": {
+                            "source": "ai_insights",
+                            "ai_insights_record_id": result.get("record_id"),
+                        },
+                        "persist": True,
+                    }
+                )
+                conversation_intelligence_stored = bool(ci_result.get("stored"))
+                conversation_intelligence_record_id = ci_result.get("record_id")
+            except Exception as ci_error:
+                logging.warning(f"Conversation intelligence auto-chain failed: {ci_error}")
+
         return {
             "success": True,
             "insights": result["insights"],
             "record_id": result.get("record_id"),
             "stored": bool(result.get("stored")),
+            "conversation_intelligence_stored": conversation_intelligence_stored,
+            "conversation_intelligence_record_id": conversation_intelligence_record_id,
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logging.error(f"AI insights generation error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to generate AI insights")
+
+
+@app.post("/conversation-intelligence/analyze", summary="Analyze Conversation Intelligence")
+async def analyze_conversation_intelligence(payload: ConversationIntelligenceRequest):
+    """Analyze chat, email, or transcript inputs and compute intent/risk scores."""
+    try:
+        service = get_conversation_intelligence_service()
+        result = await service.analyze_conversation(payload.model_dump(exclude_none=True))
+        return {
+            "success": True,
+            **result,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logging.error(f"Conversation intelligence analysis failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to analyze conversation intelligence")
+
+
+@app.get("/conversation-intelligence/lead/{lead_id}", summary="Get Latest Conversation Intelligence For Lead")
+async def get_lead_conversation_intelligence(lead_id: str):
+    """Fetch the most recent conversation intelligence record for a lead."""
+    try:
+        service = get_conversation_intelligence_service()
+        record = await service.get_latest_for_lead(lead_id)
+        return {
+            "success": True,
+            "record": record,
+        }
+    except Exception as e:
+        logging.error(f"Failed to fetch conversation intelligence for lead {lead_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch conversation intelligence")
+
+
+@app.get("/conversation-intelligence/overview", summary="Get Conversation Intelligence Overview")
+async def get_conversation_intelligence_overview(limit: int = Query(200, ge=10, le=2000)):
+    """Return aggregate conversation-intelligence metrics for dashboard cards."""
+    try:
+        service = get_conversation_intelligence_service()
+        overview = await service.get_overview(limit=limit)
+        return {
+            "success": True,
+            "overview": overview,
+        }
+    except Exception as e:
+        logging.error(f"Failed to fetch conversation intelligence overview: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch conversation intelligence overview")
 
 
 @app.post("/lead-enrichment/enrich-company", response_model=CompanyEnrichmentResponse, summary="Enrich Company Data")
@@ -638,6 +762,22 @@ async def get_model_info():
             return {"success": False, "message": "Model not loaded"}
         
         metadata = getattr(ml_service, 'model_metadata', {})
+        enhancer = getattr(ml_service, 'prediction_enhancer', None)
+        enhancer_config = getattr(enhancer, 'config', None)
+
+        confidence_threshold = 0.70
+        calibration_enabled = False
+        rule_engine_enabled = False
+        llm_fallback_enabled = False
+
+        if enhancer_config is not None:
+            try:
+                confidence_threshold = float(getattr(enhancer_config, 'confidence_threshold', 0.70))
+            except Exception:
+                confidence_threshold = 0.70
+            calibration_enabled = bool(getattr(enhancer_config, 'calibration_enabled', False))
+            rule_engine_enabled = bool(getattr(enhancer_config, 'rule_engine_enabled', False))
+            llm_fallback_enabled = bool(getattr(enhancer_config, 'llm_fallback_enabled', False))
         
         return {
             "success": True,
@@ -647,6 +787,16 @@ async def get_model_info():
                 "accuracy": metadata.get('performance', {}).get('accuracy', 0),
                 "features_count": metadata.get('features_count', 0),
                 "target_classes": metadata.get('target_classes', []),
+                "inference_pipeline": {
+                    "base_model": "Random Forest",
+                    "probability_calibration": "isotonic" if calibration_enabled else "disabled",
+                    "hybrid_rule_engine": "enabled" if rule_engine_enabled else "disabled",
+                    "uncertainty_detection": {
+                        "enabled": True,
+                        "confidence_threshold": confidence_threshold,
+                    },
+                    "llm_fallback": "enabled" if llm_fallback_enabled else "disabled",
+                },
                 "loaded": True
             }
         }

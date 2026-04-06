@@ -106,6 +106,30 @@ export default function MLStatsSample() {
   const totalPredictions = Number(stats?.total_predictions || 0);
   const coveragePercent = Math.min(100, Math.max(0, toPercentValue(stats?.coverage_percentage)));
   const modelAccuracyPercent = modelInfo?.accuracy ? toPercentValue(modelInfo.accuracy) : 0;
+  const inferencePipeline = modelInfo?.inference_pipeline || {};
+  const hasPipelineInfo = Boolean(modelInfo?.inference_pipeline);
+
+  const calibrationValue = String(inferencePipeline?.probability_calibration || "").trim();
+  const hybridRuleValue = String(inferencePipeline?.hybrid_rule_engine || "").trim();
+  const llmFallbackValue = String(inferencePipeline?.llm_fallback || "").trim();
+
+  const calibrationDisplay = calibrationValue
+    ? calibrationValue.toUpperCase()
+    : "ENABLED (DEFAULT)";
+  const hybridRuleDisplay = hybridRuleValue
+    ? hybridRuleValue.toUpperCase()
+    : "ENABLED (DEFAULT)";
+  const llmFallbackDisplay = llmFallbackValue
+    ? llmFallbackValue.toUpperCase()
+    : "DISABLED (OPTIONAL)";
+
+  const uncertaintyEnabled =
+    typeof inferencePipeline?.uncertainty_detection?.enabled === "boolean"
+      ? inferencePipeline.uncertainty_detection.enabled
+      : true;
+  const uncertaintyThresholdPercent = toPercentValue(
+    inferencePipeline?.uncertainty_detection?.confidence_threshold || 0.7
+  );
 
   const dominantTemperature = useMemo(() => {
     return normalizedDistribution.reduce(
@@ -317,12 +341,56 @@ export default function MLStatsSample() {
               </div>
             </div>
 
+            <div className="rounded-xl border border-cyan-400/25 bg-cyan-500/5 p-4 mb-5">
+              <p className="text-xs uppercase tracking-wide text-cyan-300 mb-3">Inference Pipeline</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <PipelineItem
+                  label="Base Model"
+                  value={inferencePipeline?.base_model || "Random Forest"}
+                />
+                <PipelineItem
+                  label="Probability Calibration"
+                  value={calibrationDisplay}
+                />
+                <PipelineItem
+                  label="Hybrid Rule Engine"
+                  value={hybridRuleDisplay}
+                />
+                <PipelineItem
+                  label="Uncertainty Detection"
+                  value={`${uncertaintyEnabled ? "ENABLED" : "DISABLED"} (${uncertaintyThresholdPercent.toFixed(0)}% threshold)`}
+                />
+                <PipelineItem
+                  label="LLM Fallback"
+                  value={llmFallbackDisplay}
+                />
+              </div>
+              {!hasPipelineInfo ? (
+                <p className="text-[11px] text-amber-200 mt-3">
+                  Backend is running an older model-info schema. Displaying production defaults for calibration and hybrid rules.
+                </p>
+              ) : null}
+              <p className="text-xs text-slate-300 mt-3">
+                Production scoring uses Random Forest classification with post-processing calibration and rule-based refinement.
+                Low-confidence outcomes are flagged as uncertain while preserving Hot/Warm/Cold class labels.
+              </p>
+            </div>
+
             <div className="rounded-xl border border-slate-700/70 bg-slate-900/40 p-4 text-xs text-slate-400">
               Last updated from MongoDB stats pipeline: {stats?.last_updated || "N/A"}
             </div>
           </section>
         </div>
       </div>
+    </div>
+  );
+}
+
+function PipelineItem({ label, value }) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-slate-900/60 p-3">
+      <p className="text-[11px] uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="text-sm font-semibold text-slate-100 mt-1">{value}</p>
     </div>
   );
 }

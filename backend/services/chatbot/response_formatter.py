@@ -59,8 +59,39 @@ def format_success(tool: str, arguments: Dict[str, Any], result: Dict[str, Any])
 
     if tool == "enrich_company":
         company = result.get("company", "Company")
-        domain = result.get("domain") or "no domain"
-        return f"Company enrichment completed for {company} using domain {domain}."
+        domain = result.get("domain") or "unavailable"
+        website = result.get("website") or "not provided"
+        quality = str(result.get("enrichment_quality") or "unknown").upper()
+
+        intelligence = result.get("intelligence") if isinstance(result.get("intelligence"), dict) else {}
+        industry = str(intelligence.get("industry") or "Unknown")
+        company_size = str(intelligence.get("estimated_company_size") or "Unknown")
+        summary = str(intelligence.get("summary") or "No summary generated.")
+
+        decision_makers = intelligence.get("decision_makers")
+        if isinstance(decision_makers, list):
+            decision_makers_text = ", ".join([str(item).strip() for item in decision_makers if str(item).strip()])
+        else:
+            decision_makers_text = ""
+        if not decision_makers_text:
+            decision_makers_text = "Not identified"
+
+        recommendations = result.get("recommendations")
+        recommendations_text = ""
+        if isinstance(recommendations, list) and recommendations:
+            cleaned = [str(item).strip() for item in recommendations if str(item).strip()]
+            if cleaned:
+                recommendations_text = "\nNext steps: " + " | ".join(cleaned)
+
+        return (
+            f"Company intelligence for {company}\n"
+            f"Domain: {domain} | Website: {website} | Quality: {quality}\n"
+            f"Industry: {industry}\n"
+            f"Estimated size: {company_size}\n"
+            f"Decision makers: {decision_makers_text}\n"
+            f"Summary: {summary}"
+            f"{recommendations_text}"
+        )
 
     if tool == "get_stats":
         ml_stats = result.get("ml_stats", {})

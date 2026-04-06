@@ -29,6 +29,36 @@ const saveContext = (context) => {
   }
 };
 
+const buildEnrichmentMessage = (data) => {
+  const company = data?.company || "Company";
+  const domain = data?.domain || "unavailable";
+  const website = data?.website || "not provided";
+  const quality = String(data?.enrichment_quality || "unknown").toUpperCase();
+  const intelligence = data?.intelligence || {};
+  const industry = intelligence?.industry || "Unknown";
+  const size = intelligence?.estimated_company_size || "Unknown";
+  const summary = intelligence?.summary || "No summary generated.";
+
+  const decisionMakers = Array.isArray(intelligence?.decision_makers)
+    ? intelligence.decision_makers.filter((item) => String(item || "").trim())
+    : [];
+  const decisionText = decisionMakers.length ? decisionMakers.join(", ") : "Not identified";
+
+  const recommendations = Array.isArray(data?.recommendations)
+    ? data.recommendations.filter((item) => String(item || "").trim())
+    : [];
+  const nextSteps = recommendations.length ? `\nNext steps: ${recommendations.join(" | ")}` : "";
+
+  return (
+    `Company intelligence for ${company}\n` +
+    `Domain: ${domain} | Website: ${website} | Quality: ${quality}\n` +
+    `Industry: ${industry}\n` +
+    `Estimated size: ${size}\n` +
+    `Decision makers: ${decisionText}\n` +
+    `Summary: ${summary}${nextSteps}`
+  );
+};
+
 const buildAssistantMessage = (payload) => {
   if (!payload || typeof payload !== "object") {
     return "The chatbot returned an invalid response.";
@@ -38,12 +68,16 @@ const buildAssistantMessage = (payload) => {
     return payload?.error?.message || payload?.message || "Chatbot request failed.";
   }
 
+  const tool = payload.tool;
+  const data = payload.data;
+  if (tool === "enrich_company" && data && typeof data === "object") {
+    return buildEnrichmentMessage(data);
+  }
+
   if (typeof payload.message === "string" && payload.message.trim()) {
     return payload.message;
   }
 
-  const tool = payload.tool;
-  const data = payload.data;
   if (tool === "get_leads" && data && typeof data === "object") {
     const count = Number(data.count || 0);
     return `Found ${count} lead${count === 1 ? "" : "s"}.`;
@@ -146,7 +180,7 @@ export default function Chatbot() {
                     : "mr-auto bg-slate-800/80 border border-slate-700 text-slate-100"
                 }`}
               >
-                <p>{message.text}</p>
+                <p className="whitespace-pre-line">{message.text}</p>
                 {message.meta?.tool && (
                   <p className="mt-2 text-xs text-slate-400">Tool: {message.meta.tool}</p>
                 )}

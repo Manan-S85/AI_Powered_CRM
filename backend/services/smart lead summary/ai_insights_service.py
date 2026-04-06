@@ -287,12 +287,14 @@ CONVERSATION TEXT:
                 "insights": insights,
                 "record_id": str(result.inserted_id),
                 "stored": True,
+                "resolved_text": resolved_text,
             }
 
         return {
             "insights": insights,
             "record_id": None,
             "stored": False,
+            "resolved_text": resolved_text,
         }
 
 

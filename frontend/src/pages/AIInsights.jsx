@@ -20,6 +20,8 @@ export default function AIInsights() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [recordId, setRecordId] = useState(null);
+  const [conversationRecordId, setConversationRecordId] = useState(null);
+  const [conversationStored, setConversationStored] = useState(false);
 
   useEffect(() => {
     if (validSourceTypes.includes(initialSource)) {
@@ -51,6 +53,8 @@ export default function AIInsights() {
 
       setInsights(data.insights);
       setRecordId(data.record_id || null);
+      setConversationStored(Boolean(data.conversation_intelligence_stored));
+      setConversationRecordId(data.conversation_intelligence_record_id || null);
     } catch (requestError) {
       setError(requestError.response?.data?.detail || requestError.message || "Failed to generate insights");
     } finally {
@@ -136,6 +140,8 @@ export default function AIInsights() {
                 setSelectedFile(null);
                 setError("");
                 setRecordId(null);
+                setConversationStored(false);
+                setConversationRecordId(null);
               }}
               className="px-5 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-sm font-semibold transition"
             >
@@ -151,6 +157,12 @@ export default function AIInsights() {
           </div>
 
           {recordId && <p className="text-xs text-slate-500 mb-5">Record ID: {recordId}</p>}
+          {conversationStored ? (
+            <p className="text-xs text-emerald-300/90 mb-5">
+              Conversation intelligence saved{conversationRecordId ? ` (Record: ${conversationRecordId})` : ""}.
+              Dashboard metrics will include this analysis.
+            </p>
+          ) : null}
 
           <div className="space-y-4">
             <div className="rounded-xl border border-slate-700/80 bg-slate-950/60 p-4">
