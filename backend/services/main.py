@@ -81,6 +81,15 @@ class LeadInput(BaseModel):
     interview_status: Optional[str] = None
     resume_upload: Optional[str] = None
 
+
+class ConversionLeadScoringInput(BaseModel):
+    industry: str = Field(..., min_length=1)
+    budget: float = Field(..., ge=0)
+    response_speed: float = Field(..., ge=0)
+    meeting_count: float = Field(..., ge=0)
+    email_open_rate: float = Field(..., ge=0)
+    website_visits: float = Field(..., ge=0)
+
 class MLPrediction(BaseModel):
     predicted_temperature: str
     confidence: float
@@ -153,6 +162,7 @@ class ConversationIntelligenceRequest(BaseModel):
 _cached_auth_service = None
 _lead_enrichment_modules = None
 _conversation_intelligence_service = None
+_conversion_lead_scoring_modules = None
 
 # API Routes
 @app.get("/", summary="Health Check")
@@ -276,6 +286,37 @@ def get_lead_enrichment_modules() -> Dict[str, Any]:
     return _lead_enrichment_modules
 
 
+def get_conversion_lead_scoring_modules() -> Dict[str, Any]:
+    """Load conversion lead scoring module from folder with spaces in path."""
+    global _conversion_lead_scoring_modules
+
+    if _conversion_lead_scoring_modules is not None:
+        return _conversion_lead_scoring_modules
+
+    service_dir = Path(__file__).resolve().parent
+    scoring_module_path = service_dir / "Lead scoring engine" / "lead_scoring_service" / "lead_scoring_service.py"
+
+    if not scoring_module_path.exists():
+        raise ImportError(f"Conversion lead scoring module not found at {scoring_module_path}")
+
+    module_dir = scoring_module_path.parent
+    module_dir_str = str(module_dir)
+    if module_dir_str not in sys.path:
+        sys.path.insert(0, module_dir_str)
+
+    model_loader_path = module_dir / "model_loader.py"
+    if model_loader_path.exists() and "model_loader" not in sys.modules:
+        _load_module_from_path("model_loader", model_loader_path)
+
+    module = _load_module_from_path("conversion_lead_scoring_service_module", scoring_module_path)
+
+    _conversion_lead_scoring_modules = {
+        "predict_conversion_probability_details": getattr(module, "predict_conversion_probability_details"),
+        "train_from_historical_data": getattr(module, "train_from_historical_data"),
+    }
+    return _conversion_lead_scoring_modules
+
+
 def get_ai_insights_service():
     """Lazy import AI insights service to avoid startup issues."""
     try:
@@ -382,6 +423,81 @@ async def predict_lead_temperature(payload: Dict[str, Any]):
         raise
     except Exception as e:
         logging.error(f"Error in predict endpoint: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/lead-scoring/conversion/predict", response_model=Dict[str, Any], summary="Predict Lead Conversion Probability")
+async def predict_lead_conversion_probability(payload: ConversionLeadScoringInput):
+    """
+    Predict conversion probability (%) using dynamic ML scoring.
+
+    Inputs: industry, budget, response_speed, meeting_count, email_open_rate, website_visits
+    Output: conversion probability percentage
+    """
+    try:
+        modules = get_conversion_lead_scoring_modules()
+        predictor = modules["predict_conversion_probability_details"]
+
+        result = predictor(payload.model_dump())
+        return {
+            "success": True,
+            "result": result,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logging.error(f"Error in conversion predict endpoint: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/lead-scoring/conversion/train", response_model=Dict[str, Any], summary="Train Conversion Model From Historical Leads")
+async def train_lead_conversion_model(
+    limit: int = Query(5000, ge=50, le=50000),
+    min_rows: int = Query(40, ge=10, le=5000),
+):
+    """
+    Retrain conversion model from historical lead outcomes (closed-won vs lost style statuses).
+    """
+    try:
+        ml_service = get_ml_service()
+        collection = getattr(ml_service, "collection", None)
+
+        if collection is None:
+            raise HTTPException(status_code=503, detail="Historical training source unavailable (MongoDB not connected)")
+
+        projection = {
+            "industry": 1,
+            "budget": 1,
+            "response_speed": 1,
+            "meeting_count": 1,
+            "email_open_rate": 1,
+            "website_visits": 1,
+            "outcome": 1,
+            "deal_outcome": 1,
+            "deal_status": 1,
+            "status": 1,
+            "interview_status": 1,
+            "converted": 1,
+            "is_converted": 1,
+        }
+
+        historical_records = list(collection.find({}, projection).limit(limit))
+        modules = get_conversion_lead_scoring_modules()
+        trainer = modules["train_from_historical_data"]
+
+        metadata = trainer(historical_records, min_rows=min_rows)
+        return {
+            "success": True,
+            "message": "Conversion model trained from historical closed outcomes",
+            "trained_rows": metadata.get("dataset_rows", 0),
+            "metadata": metadata,
+        }
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logging.error(f"Error in conversion train endpoint: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/lead/{unique_id}", summary="Get Lead by Unique ID")
