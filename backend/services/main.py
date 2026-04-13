@@ -20,6 +20,7 @@ from pathlib import Path
 # from auth_service import auth_service
 
 # Initialize FastAPI app
+from services.hrms_chatbot.chatbot import process_query
 app = FastAPI(
     title="AI-Powered CRM - ML Prediction API",
     description="REST API for ML-based lead scoring and temperature prediction",
@@ -289,7 +290,23 @@ async def predict_lead_temperature(lead: LeadInput):
     except Exception as e:
         logging.error(f"Error in predict endpoint: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+@app.post("/hrms/chat", summary="HRMS Chatbot Query")
+async def hrms_chatbot(query: str = Query(..., description="User query for HR chatbot")):
+    """
+    HRMS chatbot endpoint to answer employee-related queries
+    """
+    try:
+        response = process_query(query)
 
+        return {
+            "success": True,
+            "query": query,
+            "response": response
+        }
+
+    except Exception as e:
+        logging.error(f"HRMS chatbot error: {e}")
+        raise HTTPException(status_code=500, detail="Chatbot failed")
 @app.get("/lead/{unique_id}", summary="Get Lead by Unique ID")
 async def get_lead(unique_id: str):
     """
