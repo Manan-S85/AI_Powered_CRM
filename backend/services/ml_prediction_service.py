@@ -672,12 +672,102 @@ class LeadScoringService:
 
         return normalized
 
+    def _canonicalize_key(self, key: str) -> str:
+        """Return a comparable key for schema alias matching."""
+        return ''.join(ch for ch in str(key or '').lower() if ch.isalnum())
+
+    def _build_field_index(self, lead: Dict) -> Dict[str, object]:
+        """Index lead keys in canonical form for robust alias lookup."""
+        index = {}
+        for raw_key, value in (lead or {}).items():
+            index[self._canonicalize_key(raw_key)] = value
+        return index
+
+    def _pick_alias_value(self, index: Dict[str, object], *aliases, default=None):
+        """Pick first non-empty value from a list of alias keys."""
+        for alias in aliases:
+            value = index.get(self._canonicalize_key(alias))
+            if value is None:
+                continue
+            if isinstance(value, str) and not value.strip():
+                continue
+            return value
+        return default
+
+    def _to_int(self, value, default: int = 0) -> int:
+        """Best-effort conversion for numeric display fields."""
+        if value is None:
+            return default
+
+        try:
+            if isinstance(value, bool):
+                return int(value)
+            if isinstance(value, (int, float)):
+                return int(value)
+
+            value_str = str(value)
+            digits = ''.join(ch for ch in value_str if ch.isdigit() or ch == '.')
+            if not digits:
+                return default
+            return int(float(digits))
+        except Exception:
+            return default
+
     def _normalize_lead_for_response(self, lead: Dict) -> Dict:
         """Normalize lead payload before returning it through APIs."""
         if not isinstance(lead, dict):
             return lead
 
         normalized = dict(lead)
+        index = self._build_field_index(normalized)
+
+        first_name = self._pick_alias_value(index, 'first_name', 'firstName', default='')
+        last_name = self._pick_alias_value(index, 'last_name', 'lastName', default='')
+        full_name = f"{str(first_name or '').strip()} {str(last_name or '').strip()}".strip()
+
+        normalized['name'] = self._pick_alias_value(
+            index,
+            'name',
+            'full_name',
+            'full name',
+            'candidate_name',
+            default=full_name or 'N/A'
+        )
+        normalized['email'] = self._pick_alias_value(index, 'email', 'email_address', 'email address', default='N/A')
+        normalized['phone'] = self._pick_alias_value(index, 'phone', 'mobile_number', 'mobile', default='N/A')
+        normalized['role_position'] = self._pick_alias_value(
+            index,
+            'role_position',
+            'applied_position',
+            'position',
+            'job_role',
+            'job role',
+            default='N/A'
+        )
+        normalized['years_of_experience'] = self._to_int(
+            self._pick_alias_value(index, 'years_of_experience', 'years of experience', 'experience', 'exp', default=0),
+            default=0,
+        )
+        normalized['location'] = self._pick_alias_value(
+            index,
+            'location',
+            'current_location',
+            'current location',
+            'city',
+            default='N/A'
+        )
+        normalized['expected_salary'] = self._to_int(
+            self._pick_alias_value(index, 'expected_salary', 'expected salary', 'salary', 'annual_salary', default=0),
+            default=0,
+        )
+        normalized['skills'] = self._pick_alias_value(index, 'skills', 'primary_skills', 'primary skills', default='N/A')
+        normalized['highest_education'] = self._pick_alias_value(index, 'highest_education', 'highest education')
+        normalized['linkedin_profile'] = self._pick_alias_value(index, 'linkedin_profile', 'linkedin profile')
+        normalized['willing_to_relocate'] = self._pick_alias_value(index, 'willing_to_relocate', 'willing to relocate')
+        normalized['company_name'] = self._pick_alias_value(index, 'company_name', 'company name', default='')
+        normalized['company_website'] = self._pick_alias_value(index, 'company_website', 'company website', default='')
+        normalized['company_email'] = self._pick_alias_value(index, 'company_email', 'company email', default='')
+
         normalized['ml_prediction'] = self._normalize_prediction_for_response(normalized.get('ml_prediction'))
         return normalized
 

@@ -538,6 +538,8 @@ async def get_candidate(candidate_id: str):
         if not lead and getattr(ml_service, "collection", None) is not None:
             try:
                 lead = ml_service.collection.find_one({"_id": ObjectId(candidate_id)})
+                if lead:
+                    lead = ml_service._normalize_lead_for_response(lead)
             except Exception:
                 lead = None
 
