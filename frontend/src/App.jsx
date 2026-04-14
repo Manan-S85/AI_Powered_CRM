@@ -12,6 +12,8 @@ import FollowupOptimizer from "./pages/FollowupOptimizer";
 import SalesForecasting from "./pages/SalesForecasting";
 import ClientLtvPrediction from "./pages/ClientLtvPrediction";
 import ConversionLeadScoring from "./pages/ConversionLeadScoring";
+import LeadGeneration from "./pages/LeadGeneration";
+import LeadDashboard from "./pages/LeadDashboard";
 import Navbar from "./components/Navbar";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -56,6 +58,8 @@ function App() {
           <Route path="/sales-forecasting" element={<SalesForecasting />} />
           <Route path="/client-ltv" element={<ClientLtvPrediction />} />
           <Route path="/lead-scoring-conversion" element={<ConversionLeadScoring />} />
+          <Route path="/lead-generation" element={<LeadGeneration />} />
+          <Route path="/lead-dashboard" element={<LeadDashboard />} />
           <Route path="/followup-optimizer" element={<FollowupOptimizer />} />
           <Route path="/chatbot" element={<Chatbot />} />
           <Route path="/profile" element={<Profile />} />

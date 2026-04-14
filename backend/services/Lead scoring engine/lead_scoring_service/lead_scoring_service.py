@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional
+from urllib.parse import urlparse
 
 import pandas as pd
 from sklearn.calibration import CalibratedClassifierCV
@@ -294,3 +296,451 @@ def predict_conversion_probability_details(lead: Dict[str, Any]) -> Dict[str, An
         "model_name": metadata.get("model_name", "unknown"),
         "trained_at": metadata.get("training_date_utc"),
     }
+
+
+_SERVICE_KEYWORDS: Dict[str, Dict[str, Any]] = {
+    "Software Development / MERN Stack": {
+        "weight": 28,
+        "keywords": [
+            "without website",
+            "no website",
+            "missing website",
+            "outdated website",
+            "website redesign",
+            "poor website",
+            "broken site",
+            "no online presence",
+            "web app",
+            "application development",
+            "mern",
+            "react",
+            "node.js",
+            "full stack",
+        ],
+    },
+    "AI Integration / AI-ML Solutions": {
+        "weight": 20,
+        "keywords": [
+            "ai",
+            "machine learning",
+            "ml",
+            "analytics",
+            "prediction",
+            "automation",
+            "intelligence",
+            "chatbot",
+            "recommendation",
+        ],
+    },
+    "Cloud Solutions": {
+        "weight": 18,
+        "keywords": [
+            "cloud",
+            "aws",
+            "azure",
+            "gcp",
+            "scalable",
+            "infrastructure",
+            "migration",
+            "devops",
+            "kubernetes",
+        ],
+    },
+    "Blockchain Solutions": {
+        "weight": 16,
+        "keywords": [
+            "blockchain",
+            "web3",
+            "smart contract",
+            "token",
+            "ledger",
+            "decentralized",
+        ],
+    },
+    "Cybersecurity Services": {
+        "weight": 17,
+        "keywords": [
+            "security",
+            "cybersecurity",
+            "breach",
+            "compliance",
+            "vulnerability",
+            "threat",
+            "data protection",
+        ],
+    },
+    "Resource Deployment Services": {
+        "weight": 22,
+        "keywords": [
+            "startup",
+            "expansion",
+            "hiring",
+            "scaling",
+            "new branch",
+            "funding",
+            "growth phase",
+            "dedicated developer",
+            "team augmentation",
+            "resource deployment",
+        ],
+    },
+}
+
+_URGENCY_KEYWORDS = {
+    "urgent",
+    "immediate",
+    "asap",
+    "struggling",
+    "needs help",
+    "looking for",
+    "seeking",
+    "require",
+}
+
+_LOCATION_PATTERN = re.compile(
+    r"\b(?:in|at|from)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,3}(?:,\s*[A-Z]{2})?)"
+)
+
+_KNOWN_AGGREGATOR_DOMAINS = {
+    "google.com",
+    "www.google.com",
+    "maps.google.com",
+    "facebook.com",
+    "www.facebook.com",
+    "yelp.com",
+    "www.yelp.com",
+    "yellowpages.com",
+    "www.yellowpages.com",
+    "linkedin.com",
+    "www.linkedin.com",
+    "indeed.com",
+    "www.indeed.com",
+    "crunchbase.com",
+    "www.crunchbase.com",
+    "serpapi.com",
+    "www.serpapi.com",
+    "justdial.com",
+    "www.justdial.com",
+    "sulekha.com",
+    "www.sulekha.com",
+    "indiamart.com",
+    "www.indiamart.com",
+}
+
+_LISTING_KEYWORDS = {
+    "list of",
+    "top ",
+    "directory",
+    "view list",
+    "justdial",
+    "sulekha",
+    "indiamart",
+    "yelp",
+}
+
+_EMAIL_PATTERN = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
+_PHONE_PATTERN = re.compile(r"(?:\+?\d{1,3}[\s-]?)?(?:\(?\d{2,5}\)?[\s-]?)?\d{3,5}[\s-]?\d{4,6}")
+
+_INDUSTRY_RULES = [
+    ("Marketing & Advertising", ["seo", "marketing", "advertising", "branding"]),
+    ("Software / SaaS", ["saas", "software", "platform", "cloud", "app"]),
+    ("Healthcare", ["clinic", "health", "medical", "hospital", "dental"]),
+    ("Real Estate", ["real estate", "property", "realtor", "brokerage"]),
+    ("E-commerce / Retail", ["ecommerce", "retail", "shop", "store", "merchant"]),
+    ("Professional Services", ["consulting", "agency", "firm", "services"]),
+    ("Manufacturing", ["manufacturing", "factory", "industrial", "supply chain"]),
+    ("Finance", ["finance", "fintech", "bank", "insurance", "wealth"]),
+    ("Education", ["education", "school", "academy", "edtech", "training"]),
+]
+
+
+def _normalize_whitespace(value: str) -> str:
+    return re.sub(r"\s+", " ", (value or "")).strip()
+
+
+def _extract_domain(url: str) -> str:
+    parsed = urlparse((url or "").strip())
+    return parsed.netloc.lower().strip()
+
+
+def _extract_email(text: str) -> str:
+    match = _EMAIL_PATTERN.search(text or "")
+    return match.group(0) if match else "Unknown"
+
+
+def _extract_phone(text: str) -> str:
+    match = _PHONE_PATTERN.search(text or "")
+    if not match:
+        return "Unknown"
+    return _normalize_whitespace(match.group(0))
+
+
+def _normalize_website_url(raw_website: str, fallback_link: str) -> str:
+    website = (raw_website or "").strip()
+    if website and website.startswith(("http://", "https://")):
+        return website
+
+    link = (fallback_link or "").strip()
+    if link.startswith(("http://", "https://")):
+        domain = _extract_domain(link)
+        if domain and domain not in _KNOWN_AGGREGATOR_DOMAINS:
+            return link
+
+    return "Unknown"
+
+
+def _is_listing_result(title: str, snippet: str) -> bool:
+    text = f"{title} {snippet}".lower()
+    return any(keyword in text for keyword in _LISTING_KEYWORDS)
+
+
+def _infer_contact_role(primary_service: str) -> str:
+    lower = primary_service.lower()
+    if "ai" in lower:
+        return "CTO / Head of AI"
+    if "cloud" in lower:
+        return "CTO / DevOps Lead"
+    if "cyber" in lower:
+        return "CISO / IT Head"
+    if "blockchain" in lower:
+        return "CTO / Product Head"
+    if "resource" in lower:
+        return "Founder / HR Head"
+    return "Founder / Operations Head"
+
+
+def _domain_to_business_name(domain: str) -> str:
+    if not domain:
+        return "Unknown"
+
+    normalized = domain.replace("www.", "")
+    host_parts = [part for part in normalized.split(".") if part]
+    if not host_parts:
+        return "Unknown"
+
+    root = host_parts[0].replace("-", " ").replace("_", " ").strip()
+    if not root:
+        return "Unknown"
+
+    return " ".join(token.capitalize() for token in root.split())
+
+
+def _extract_business_name(title: str, link: str) -> str:
+    cleaned_title = _normalize_whitespace(title)
+    if cleaned_title:
+        for separator in ["|", " - ", " – ", " — ", ":"]:
+            if separator in cleaned_title:
+                candidate = _normalize_whitespace(cleaned_title.split(separator)[0])
+                if len(candidate) >= 2:
+                    return candidate
+        return cleaned_title
+
+    return _domain_to_business_name(_extract_domain(link))
+
+
+def _infer_industry(text: str) -> str:
+    lowered = (text or "").lower()
+    for industry, keywords in _INDUSTRY_RULES:
+        if any(keyword in lowered for keyword in keywords):
+            return industry
+    return "Unknown"
+
+
+def _infer_location(text: str) -> str:
+    match = _LOCATION_PATTERN.search(text or "")
+    if not match:
+        return "Unknown"
+    return _normalize_whitespace(match.group(1)) or "Unknown"
+
+
+def _infer_website_presence(snippet: str, link: str, website_url: str, query_context: str = "") -> str:
+    combined = f"{snippet} {link} {query_context}".lower()
+    if website_url and website_url != "Unknown":
+        return "Yes"
+
+    if any(phrase in combined for phrase in ["without website", "no website", "missing website"]):
+        return "No"
+
+    domain = _extract_domain(link)
+    if domain and domain not in _KNOWN_AGGREGATOR_DOMAINS:
+        return "Yes"
+
+    if any(phrase in combined for phrase in ["website", "visit us", "online store", "www."]):
+        return "Yes"
+
+    return "Unknown"
+
+
+def _score_services(text: str, website_presence: str) -> Dict[str, int]:
+    lowered = (text or "").lower()
+    scores: Dict[str, int] = {service: 0 for service in _SERVICE_KEYWORDS}
+
+    for service, config in _SERVICE_KEYWORDS.items():
+        base_weight = int(config["weight"])
+        keyword_hits = sum(1 for keyword in config["keywords"] if keyword in lowered)
+        if keyword_hits:
+            scores[service] += base_weight + (keyword_hits - 1) * 5
+
+    if website_presence == "No":
+        scores["Software Development / MERN Stack"] += 30
+        scores["Cloud Solutions"] += 6
+    elif website_presence == "Unknown":
+        scores["Software Development / MERN Stack"] += 8
+
+    return scores
+
+
+def _score_urgency(text: str) -> int:
+    lowered = (text or "").lower()
+    return sum(8 for keyword in _URGENCY_KEYWORDS if keyword in lowered)
+
+
+def _build_reasoning(
+    business_name: str,
+    primary_service: str,
+    website_presence: str,
+    service_scores: Dict[str, int],
+    urgency_score: int,
+) -> str:
+    top_signals = sorted(service_scores.items(), key=lambda item: item[1], reverse=True)[:2]
+    signal_labels = ", ".join(
+        f"{service}({score})" for service, score in top_signals if score > 0
+    )
+    if not signal_labels:
+        signal_labels = "limited explicit need signals"
+
+    return (
+        f"{business_name} shows strongest need for {primary_service}. "
+        f"Website presence: {website_presence}. "
+        f"Detected signals: {signal_labels}; urgency score {urgency_score}."
+    )
+
+
+def _classify_lead(score: int) -> str:
+    if score >= 75:
+        return "HOT"
+    if score >= 45:
+        return "WARM"
+    return "COLD"
+
+
+def _build_lead_from_search_result(search_result: Dict[str, Any], query_context: str = "") -> Dict[str, Any]:
+    title = str(search_result.get("title") or "")
+    snippet = str(search_result.get("snippet") or "")
+    link = str(search_result.get("link") or "")
+    phone_hint = str(search_result.get("phone") or "")
+    email_hint = str(search_result.get("email") or "")
+    address_hint = str(search_result.get("address") or "")
+    industry_hint = str(search_result.get("industry") or "")
+    website_raw = str(search_result.get("website") or "")
+    contact_person_hint = str(search_result.get("contact_person") or "").strip()
+
+    website_url = _normalize_website_url(website_raw, link)
+    context_text = _normalize_whitespace(
+        f"{title}. {snippet}. {link}. {query_context}. {industry_hint}. {address_hint}"
+    )
+
+    business_name = _extract_business_name(title, link)
+    industry = industry_hint or _infer_industry(context_text)
+    location = address_hint or _infer_location(f"{title} {snippet} {query_context}")
+    website_presence = _infer_website_presence(snippet, link, website_url, query_context=query_context)
+
+    service_scores = _score_services(context_text, website_presence)
+    urgency_score = _score_urgency(context_text)
+    growth_score = service_scores.get("Resource Deployment Services", 0)
+    strength_score = max(service_scores.values()) if service_scores else 0
+
+    confidence_score = max(0, min(100, int(strength_score + urgency_score + (growth_score * 0.35))))
+    lead_category = _classify_lead(confidence_score)
+
+    ranked_services = [
+        service
+        for service, score in sorted(service_scores.items(), key=lambda item: item[1], reverse=True)
+        if score > 0
+    ]
+
+    if ranked_services:
+        primary_service = ranked_services[0]
+        secondary_services = ranked_services[1:3]
+    else:
+        primary_service = "Software Development / MERN Stack"
+        secondary_services = []
+
+    reasoning = _build_reasoning(
+        business_name=business_name,
+        primary_service=primary_service,
+        website_presence=website_presence,
+        service_scores=service_scores,
+        urgency_score=urgency_score,
+    )
+
+    contact_phone = phone_hint or _extract_phone(snippet)
+    contact_email = email_hint or _extract_email(snippet)
+    source_link = link if link else "Unknown"
+    contact_role = _infer_contact_role(primary_service)
+    contact_person = contact_person_hint or contact_role
+
+    return {
+        "business_name": business_name,
+        "industry": industry,
+        "location": location,
+        "website_present": website_presence,
+        "company_website": website_url,
+        "contact_person": contact_person,
+        "contact_phone": contact_phone,
+        "contact_email": contact_email,
+        "source_link": source_link,
+        "primary_service_needed": primary_service,
+        "secondary_services": secondary_services,
+        "lead_category": lead_category,
+        "confidence_score": confidence_score,
+        "reasoning": reasoning,
+    }
+
+
+def qualify_search_results(
+    search_results: Iterable[Dict[str, Any]],
+    query_context: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Transform SerpApi-like search results into CRM-ready qualified leads.
+
+    Each input item may contain title, snippet, and link fields.
+    """
+    if search_results is None:
+        raise LeadScoringError("search_results payload is required")
+
+    qualified_leads: List[Dict[str, Any]] = []
+    context = str(query_context or "").strip()
+
+    for item in search_results:
+        if not isinstance(item, dict):
+            continue
+        if not any(item.get(key) for key in ("title", "snippet", "link")):
+            continue
+
+        title = str(item.get("title") or "")
+        snippet = str(item.get("snippet") or "")
+        website = str(item.get("website") or "")
+        phone = str(item.get("phone") or "")
+        address = str(item.get("address") or "")
+        source_type = str(item.get("source_type") or "").lower()
+
+        if _is_listing_result(title, snippet):
+            # Keep only local-place records with at least one actionable contact/location signal.
+            if source_type != "local":
+                continue
+            if not any([phone, address, website]):
+                continue
+
+        qualified_leads.append(_build_lead_from_search_result(item, query_context=context))
+
+    if not qualified_leads:
+        for item in search_results:
+            if not isinstance(item, dict):
+                continue
+            if not any(item.get(key) for key in ("title", "snippet", "link")):
+                continue
+            qualified_leads.append(_build_lead_from_search_result(item, query_context=context))
+
+    return qualified_leads

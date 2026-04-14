@@ -90,6 +90,19 @@ class ConversionLeadScoringInput(BaseModel):
     email_open_rate: float = Field(..., ge=0)
     website_visits: float = Field(..., ge=0)
 
+
+class SearchResultInput(BaseModel):
+    title: str = ""
+    snippet: str = ""
+    link: Optional[str] = None
+
+
+class LeadGenerationQualifyRequest(BaseModel):
+    query: Optional[str] = None
+    search_results: List[SearchResultInput] = Field(default_factory=list)
+    max_results: int = Field(10, ge=1, le=20)
+    persist: bool = True
+
 class MLPrediction(BaseModel):
     predicted_temperature: str
     confidence: float
@@ -126,6 +139,7 @@ class CompanyEnrichmentRequest(BaseModel):
     company_name: str
     company_website: Optional[str] = None
     company_email: Optional[EmailStr] = None
+    company_location: Optional[str] = None
 
 
 class CompanyEnrichmentResponse(BaseModel):
@@ -313,8 +327,25 @@ def get_conversion_lead_scoring_modules() -> Dict[str, Any]:
     _conversion_lead_scoring_modules = {
         "predict_conversion_probability_details": getattr(module, "predict_conversion_probability_details"),
         "train_from_historical_data": getattr(module, "train_from_historical_data"),
+        "qualify_search_results": getattr(module, "qualify_search_results"),
     }
     return _conversion_lead_scoring_modules
+
+
+def get_generated_leads_collection():
+    """Resolve MongoDB collection used to persist lead generation results."""
+    ml_service = get_ml_service()
+    base_collection = getattr(ml_service, "collection", None)
+    if base_collection is None:
+        return None
+    return base_collection.database["generated_leads"]
+
+
+def _serialize_mongo_doc(document: Dict[str, Any]) -> Dict[str, Any]:
+    payload = dict(document or {})
+    if "_id" in payload:
+        payload["_id"] = str(payload["_id"])
+    return payload
 
 
 def get_ai_insights_service():
@@ -447,6 +478,177 @@ async def predict_lead_conversion_probability(payload: ConversionLeadScoringInpu
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logging.error(f"Error in conversion predict endpoint: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post(
+    "/lead-generation/qualify-search-results",
+    response_model=List[Dict[str, Any]],
+    summary="Qualify SerpApi Search Results Into Actionable Leads",
+)
+async def qualify_search_results_for_lead_generation(payload: LeadGenerationQualifyRequest):
+    """
+    Transform raw SerpApi search results into CRM-ready leads with service mapping and scoring.
+    """
+    try:
+        modules = get_conversion_lead_scoring_modules()
+        qualifier = modules["qualify_search_results"]
+        query = str(payload.query or "").strip()
+
+        search_results: List[Dict[str, Any]] = [result.model_dump() for result in payload.search_results]
+
+        if query and not search_results:
+            from serpapi_service import search_google_business_results
+
+            search_results = search_google_business_results(query, num=payload.max_results)
+
+        if not search_results:
+            raise HTTPException(status_code=400, detail="Provide query or search_results")
+
+        leads = qualifier(search_results, query_context=query)
+
+        if payload.persist and query:
+            collection = get_generated_leads_collection()
+            if collection is not None and leads:
+                generated_at = datetime.utcnow().isoformat()
+                documents = []
+                for index, lead in enumerate(leads):
+                    normalized_lead = dict(lead)
+                    normalized_lead["lead_category"] = str(normalized_lead.get("lead_category") or "COLD").upper()
+                    documents.append(
+                        {
+                            "query": query,
+                            "rank": index + 1,
+                            "lead": normalized_lead,
+                            "search_result": search_results[index] if index < len(search_results) else {},
+                            "generated_at": generated_at,
+                            "source": "serpapi-google",
+                        }
+                    )
+
+                if documents:
+                    collection.insert_many(documents)
+
+        return leads
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logging.error(f"Error in lead generation qualify endpoint: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post(
+    "/lead-generation/search-query",
+    response_model=Dict[str, Any],
+    summary="Lead Generation From Natural Language Query",
+)
+async def run_lead_generation_from_query(payload: LeadGenerationQualifyRequest):
+    """
+    Accept natural language query, fetch SerpApi results, qualify leads,
+    and persist results for lead dashboard analytics.
+    """
+    try:
+        query = str(payload.query or "").strip()
+        if not query:
+            raise HTTPException(status_code=400, detail="query is required")
+
+        from serpapi_service import search_google_business_results
+
+        modules = get_conversion_lead_scoring_modules()
+        qualifier = modules["qualify_search_results"]
+
+        search_results = search_google_business_results(query, num=payload.max_results)
+        leads = qualifier(search_results, query_context=query)
+
+        persisted_count = 0
+        if payload.persist:
+            collection = get_generated_leads_collection()
+            if collection is None:
+                raise HTTPException(status_code=503, detail="MongoDB unavailable for lead dashboard persistence")
+
+            generated_at = datetime.utcnow().isoformat()
+            documents = []
+            for index, lead in enumerate(leads):
+                normalized_lead = dict(lead)
+                normalized_lead["lead_category"] = str(normalized_lead.get("lead_category") or "COLD").upper()
+                documents.append(
+                    {
+                        "query": query,
+                        "rank": index + 1,
+                        "lead": normalized_lead,
+                        "search_result": search_results[index] if index < len(search_results) else {},
+                        "generated_at": generated_at,
+                        "source": "serpapi-google",
+                    }
+                )
+
+            if documents:
+                inserted = collection.insert_many(documents)
+                persisted_count = len(inserted.inserted_ids)
+
+        return {
+            "success": True,
+            "query": query,
+            "count": len(leads),
+            "persisted_count": persisted_count,
+            "leads": leads,
+        }
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logging.error(f"Error in lead generation query endpoint: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get(
+    "/lead-generation/dashboard",
+    response_model=Dict[str, Any],
+    summary="Lead Generation Dashboard Data",
+)
+async def get_lead_generation_dashboard(
+    limit: int = Query(100, ge=1, le=500),
+    category: Optional[str] = Query(None),
+):
+    """Return persisted lead-generation records and HOT/WARM/COLD counts."""
+    try:
+        collection = get_generated_leads_collection()
+        if collection is None:
+            raise HTTPException(status_code=503, detail="MongoDB unavailable for lead dashboard")
+
+        normalized_category = str(category or "").strip().upper()
+        query: Dict[str, Any] = {}
+        if normalized_category:
+            if normalized_category not in {"HOT", "WARM", "COLD"}:
+                raise HTTPException(status_code=400, detail="category must be HOT, WARM, or COLD")
+            query["lead.lead_category"] = normalized_category
+
+        records = [_serialize_mongo_doc(doc) for doc in collection.find(query).sort("generated_at", -1).limit(limit)]
+
+        def _is_noise_record(record: Dict[str, Any]) -> bool:
+            lead = record.get("lead") if isinstance(record, dict) else {}
+            business_name = str((lead or {}).get("business_name") or "").lower()
+            return any(token in business_name for token in ["list of", "view list", "directory"])
+
+        records = [record for record in records if not _is_noise_record(record)]
+
+        distribution = {"HOT": 0, "WARM": 0, "COLD": 0}
+        for row in collection.aggregate([{"$group": {"_id": "$lead.lead_category", "count": {"$sum": 1}}}]):
+            label = str(row.get("_id") or "").upper()
+            if label in distribution:
+                distribution[label] = int(row.get("count") or 0)
+
+        return {
+            "success": True,
+            "count": len(records),
+            "classification_counts": distribution,
+            "records": records,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error in lead generation dashboard endpoint: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -775,17 +977,39 @@ async def enrich_company_data(payload: CompanyEnrichmentRequest):
     """Generate AI company intelligence from company inputs using moved enrichment modules."""
     try:
         modules = get_lead_enrichment_modules()
+        from serpapi_service import build_search_context, pick_best_website, search_google_business_results
 
         company = payload.company_name.strip()
         website = (payload.company_website or "").strip()
         email = str(payload.company_email).strip() if payload.company_email else ""
+        location = (payload.company_location or "").strip()
 
         if not company:
             raise HTTPException(status_code=400, detail="company_name is required")
 
+        discovery_query = f"{company} {location}".strip()
+        serp_results: List[Dict[str, str]] = []
+
+        if not website:
+            try:
+                serp_results = search_google_business_results(discovery_query, num=6)
+                discovered_website = pick_best_website(serp_results)
+                if discovered_website:
+                    website = discovered_website
+            except Exception as serp_error:
+                logging.warning(f"SerpApi enrichment discovery failed for {company}: {serp_error}")
+
         domain = modules["extract_domain"](email, website)
         website_content = modules["scrape_website"](website) if website else ""
+        if not website_content and serp_results:
+            website_content = build_search_context(serp_results, max_items=6)
+
         intelligence = modules["generate_company_intelligence"](company, website_content)
+        intelligence["serpapi_used"] = bool(serp_results)
+        intelligence["search_result_count"] = len(serp_results)
+        intelligence["discovery_query"] = discovery_query
+        intelligence["discovered_website"] = website or None
+        intelligence["search_preview"] = serp_results[:3]
 
         return {
             "success": True,

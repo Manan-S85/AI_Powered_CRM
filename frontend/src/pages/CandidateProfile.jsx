@@ -131,6 +131,7 @@ export default function CandidateProfile() {
         company_name: companyName.trim(),
         company_website: companyWebsite.trim() || null,
         company_email: companyEmail.trim() || null,
+        company_location: candidate?.location || null,
       });
 
       setIntelligence(data?.intelligence || initialIntelligence);
