@@ -328,6 +328,7 @@ def get_conversion_lead_scoring_modules() -> Dict[str, Any]:
         "predict_conversion_probability_details": getattr(module, "predict_conversion_probability_details"),
         "train_from_historical_data": getattr(module, "train_from_historical_data"),
         "qualify_search_results": getattr(module, "qualify_search_results"),
+        "get_conversion_model_info": getattr(module, "get_conversion_model_info"),
     }
     return _conversion_lead_scoring_modules
 
@@ -478,6 +479,22 @@ async def predict_lead_conversion_probability(payload: ConversionLeadScoringInpu
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logging.error(f"Error in conversion predict endpoint: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/lead-scoring/conversion/model-info", response_model=Dict[str, Any], summary="Get Conversion Lead Scoring Model Information")
+async def get_conversion_lead_scoring_model_info():
+    """Return model type, artifact paths, and available metrics for conversion scoring."""
+    try:
+        modules = get_conversion_lead_scoring_modules()
+        model_info_getter = modules["get_conversion_model_info"]
+        info = model_info_getter()
+        return {
+            "success": True,
+            "model_info": info,
+        }
+    except Exception as e:
+        logging.error(f"Error in conversion model info endpoint: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -21,9 +21,27 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 
 try:
-    from .model_loader import load_encoder, load_metadata, load_model, save_artifacts
+    from .model_loader import (
+        ARTIFACT_DIR,
+        ENCODER_PATH,
+        METADATA_PATH,
+        MODEL_PATH,
+        load_encoder,
+        load_metadata,
+        load_model,
+        save_artifacts,
+    )
 except ImportError:
-    from model_loader import load_encoder, load_metadata, load_model, save_artifacts
+    from model_loader import (
+        ARTIFACT_DIR,
+        ENCODER_PATH,
+        METADATA_PATH,
+        MODEL_PATH,
+        load_encoder,
+        load_metadata,
+        load_model,
+        save_artifacts,
+    )
 
 
 LOGGER = logging.getLogger(__name__)
@@ -289,12 +307,56 @@ def predict_conversion_probability_details(lead: Dict[str, Any]) -> Dict[str, An
     ratio = round(percentage / 100.0, 6)
 
     metadata = load_metadata()
+    model_name = metadata.get("model_name")
+    if not model_name:
+        try:
+            loaded_model = load_model()
+            model_name = type(loaded_model).__name__
+        except Exception:
+            model_name = "unknown"
 
     return {
         "conversion_probability_pct": percentage,
         "conversion_probability_ratio": ratio,
-        "model_name": metadata.get("model_name", "unknown"),
+        "model_name": model_name,
         "trained_at": metadata.get("training_date_utc"),
+    }
+
+
+def get_conversion_model_info() -> Dict[str, Any]:
+    """Return conversion-model type, artifact paths, and available metrics."""
+    metadata = load_metadata() or {}
+
+    model_class = None
+    model_module = None
+    model_ready = False
+    model_load_error = None
+
+    try:
+        loaded_model = load_model()
+        model_ready = True
+        model_class = type(loaded_model).__name__
+        model_module = type(loaded_model).__module__
+    except Exception as error:
+        model_load_error = str(error)
+
+    return {
+        "model_ready": model_ready,
+        "model_name": metadata.get("model_name") or model_class or "unknown",
+        "model_class": model_class,
+        "model_module": model_module,
+        "artifact_dir": str(ARTIFACT_DIR),
+        "artifacts": {
+            "model": str(MODEL_PATH),
+            "encoder": str(ENCODER_PATH),
+            "metadata": str(METADATA_PATH),
+            "metadata_exists": METADATA_PATH.exists(),
+        },
+        "trained_at": metadata.get("training_date_utc"),
+        "metrics": metadata.get("metrics", {}),
+        "metrics_available": bool(metadata.get("metrics")),
+        "metadata": metadata,
+        "model_load_error": model_load_error,
     }
 
 
